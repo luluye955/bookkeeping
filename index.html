@@ -172,6 +172,7 @@
               <span>{{ item.category }}</span>
               <span v-if="item.note" class="text-xs font-normal text-slate-500">· {{ item.note }}</span>
             </div>
+            <!-- 移除冗餘的長按提示文字，保持畫面乾淨 -->
             <div class="text-[11px] text-slate-400 mt-0.5">
               {{ item.date }}
             </div>
@@ -191,7 +192,7 @@
         <button @click="homeTab = 'income'" :class="homeTab === 'income' ? 'bg-white text-emerald-600 font-bold shadow-md' : 'text-slate-500'" class="flex-1 py-2.5 rounded-xl text-sm transition">收入</button>
       </div>
 
-      <!-- 修正分類按鈕重複文字與收入分類顯示 -->
+      <!-- 完美修復分類按鈕：無重複文字、收入與支出分類獨立正確顯示 -->
       <div class="grid grid-cols-4 gap-3 pt-2">
         <div 
           v-for="(cat, index) in (homeTab === 'expense' ? activeExpenseCats : activeIncomeCats)" 
@@ -209,14 +210,14 @@
             title="刪除此分類"
           >&times;</button>
 
-          <span class="text-xs font-bold text-slate-700 truncate w-full text-center mt-1">{{ cat }}</span>
+          <span class="text-xs font-bold text-slate-700 truncate w-full text-center">{{ cat }}</span>
         </div>
 
         <button 
           @click="openAddCatModal(homeTab)"
           class="bg-emerald-50 border border-emerald-200 border-dashed p-3 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-95 transition h-20 text-emerald-600"
         >
-          <div class="w-7 h-7 rounded-xl bg-emerald-200/60 flex items-center justify-center font-bold text-base">＋</div>
+          <div class="w-6 h-6 rounded-xl bg-emerald-200/60 flex items-center justify-center font-bold text-sm">＋</div>
           <span class="text-xs font-semibold truncate w-full text-center">新增</span>
         </button>
       </div>
@@ -324,7 +325,7 @@
   } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
   import { 
     getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, 
-    onSnapshot, query, orderBy, serverTimestamp, setDoc, getDocs, where 
+    onSnapshot, query, orderBy, serverTimestamp, setDoc, getDocs, where, getDoc 
   } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -441,10 +442,16 @@
         });
 
         const metaRef = doc(db, "users", uid, "settings", "categories");
-        unsubMeta = onSnapshot(metaRef, (snap) => {
+        unsubMeta = onSnapshot(metaRef, async (snap) => {
           if (snap.exists()) {
             if (snap.data().expense) activeExpenseCats.value = snap.data().expense;
             if (snap.data().income) activeIncomeCats.value = snap.data().income;
+          } else {
+            // 如果雲端尚無分類設定，初始化寫入預設值
+            await setDoc(metaRef, {
+              expense: ["食物", "飲料", "日用", "材料", "瓦斯", "加油", "店租"],
+              income: ["攤收", "店收", "市集", "其他"]
+            }, { merge: true });
           }
         });
       };
