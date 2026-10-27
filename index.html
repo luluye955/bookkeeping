@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>雲端私人記帳</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    /* 移除 iOS 點擊高亮與優化手機手感 */
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased pb-24">
+
+<div id="app" class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col relative shadow-lg">
+
+  <!-- 未登入介面 -->
+  <div v-if="!user" class="flex-1 flex flex-col justify-center px-6 py-12">
+    <div class="text-center mb-8">
+      <div class="inline-block p-4 bg-emerald-500 text-white rounded-3xl shadow-lg mb-3">
+        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+      </div>
+      <h1 class="text-2xl font-bold text-slate-800">雙機即時同步記帳</h1>
+      <p class="text-xs text-slate-400 mt-1">兩台手機登入相同帳密，即可自動同步</p>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Email 信箱</label>
+        <input v-model="authEmail" type="email" placeholder="example@email.com" class="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">密碼</label>
+        <input v-model="authPassword" type="password" placeholder="請輸入 6 位以上密碼" class="w-full px-3 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+      </div>
+      <div v-if="authError" class="text-xs text-rose-500 font-medium">{{ authError }}</div>
+
+      <div class="flex gap-2 pt-2">
+        <button @click="handleLogin" :disabled="authLoading" class="flex-1 py-3 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition shadow disabled:opacity-50 text-sm">登入</button>
+        <button @click="handleRegister" :disabled="authLoading" class="flex-1 py-3 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition text-sm">註冊帳號</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 已登入介面 -->
+  <div v-else class="flex-1 flex flex-col">
+    <!-- 頂部導航 -->
+    <header class="bg-white px-4 py-3 border-b sticky top-0 z-20 flex justify-between items-center shadow-xs">
+      <div>
+        <h1 class="text-base font-bold text-slate-800">我的雲端帳本</h1>
+        <p class="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> 雲端同步中
+        </p>
+      </div>
+      <button @click="handleLogout" class="text-xs text-slate-400 hover:text-rose-500 py-1 px-2 border rounded-lg">登出</button>
+    </header>
+
+    <!-- 標籤頁 1：收支明細 -->
+    <main v-if="currentTab === 'records'" class="flex-1 p-4 space-y-4">
+      <!-- 月份收支卡片 -->
+      <div class="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-3xl p-5 shadow-md">
+        <div class="flex justify-between items-center mb-3">
+          <input type="month" v-model="selectedMonth" class="bg-white/20 text-white text-xs font-semibold px-2 py-1 rounded-lg border border-white/30 focus:outline-none">
+          <span class="text-xs opacity-80">本月結餘</span>
+        </div>
+        <div class="text-3xl font-black tracking-tight mb-4">
+          NT$ {{ formatNumber(monthlyBalance) }}
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-3 border-t border-white/20">
+          <div>
+            <div class="text-[11px] opacity-75">本月收入</div>
+            <div class="text-sm font-bold text-emerald-200">+ NT$ {{ formatNumber(monthlyIncome) }}</div>
+          </div>
+          <div>
+            <div class="text-[11px] opacity-75">本月支出</div>
+            <div class="text-sm font-bold text-rose-200">- NT$ {{ formatNumber(monthlyExpense) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 篩選器 -->
+      <div class="flex gap-2 text-xs overflow-x-auto pb-1">
+        <select v-model="filterAccount" class="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-600">
+          <option value="">所有帳戶</option>
+          <option v-for="acc in accounts" :key="acc.id" :value="acc.id">{{ acc.name }}</option>
+        </select>
+        <select v-model="filterCategory" class="px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-600">
+          <option value="">所有分類</option>
+          <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+        </select>
+      </div>
+
+      <!-- 明細列表 -->
+      <div class="space-y-2">
+        <div v-if="filteredTransactions.length === 0" class="text-center py-12 text-slate-400 text-xs">
+          本月份目前尚無紀錄，點選下方「＋」開始記帳
+        </div>
+        <div 
+          v-for="item in filteredTransactions" 
+          :key="item.id" 
+          @click="openEditModal(item)"
+          class="bg-white p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between active:scale-[0.99] transition shadow-xs cursor-pointer"
+        >
+          <div class="flex items-center gap-3">
+            <div :class="item.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'" class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-xs shrink-0">
+              {{ item.category.slice(0, 2) }}
+            </div>
+            <div>
+              <div class="text-sm font-semibold text-slate-800">{{ item.category }}</div>
+              <div class="text-[11px] text-slate-400">
+                {{ item.date }} · {{ getAccountName(item.accountId) }}
+                <span v-if="item.note">· {{ item.note }}</span>
+              </div>
+            </div>
+          </div>
+          <div :class="item.type === 'income' ? 'text-emerald-600' : 'text-slate-800'" class="text-sm font-bold">
+            {{ item.type === 'income' ? '+' : '-' }} {{ formatNumber(item.amount) }}
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 標籤頁 2：帳戶管理 -->
+    <main v-if="currentTab === 'accounts'" class="flex-1 p-4 space-y-4">
+      <div class="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs">
+        <div class="text-xs text-slate-400 mb-1">總淨資產</div>
+        <div class="text-2xl font-black text-slate-800">NT$ {{ formatNumber(totalNetWorth) }}</div>
+      </div>
+
+      <div class="flex justify-between items-center pt-2">
+        <h2 class="text-sm font-bold text-slate-700">帳戶清單</h2>
+        <button @click="showAccountModal = true" class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-xl font-medium shadow-xs">+ 新增帳戶</button>
+      </div>
+
+      <div class="space-y-2">
+        <div v-for="acc in calculatedAccounts" :key="acc.id" class="bg-white p-4 rounded-2xl border border-slate-100 flex justify-between items-center shadow-xs">
+          <div>
+            <div class="text-sm font-bold text-slate-800">{{ acc.name }}</div>
+            <div class="text-[11px] text-slate-400">初始餘額：NT$ {{ formatNumber(acc.initialBalance) }}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-sm font-bold text-emerald-600">NT$ {{ formatNumber(acc.currentBalance) }}</div>
+            <button @click.stop="deleteAccount(acc.id)" class="text-[10px] text-rose-400 hover:text-rose-600 mt-1">刪除</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 標籤頁 3：報表統計 -->
+    <main v-if="currentTab === 'reports'" class="flex-1 p-4 space-y-4">
+      <div class="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-sm font-bold text-slate-700">支出類別佔比</h2>
+          <input type="month" v-model="selectedMonth" class="text-xs border rounded-lg px-2 py-1">
+        </div>
+        <div v-if="categoryStats.length === 0" class="text-xs text-slate-400 text-center py-6">此月份無支出紀錄</div>
+        <div class="space-y-3">
+          <div v-for="cat in categoryStats" :key="cat.name">
+            <div class="flex justify-between text-xs mb-1 font-semibold">
+              <span>{{ cat.name }}</span>
+              <span>NT$ {{ formatNumber(cat.total) }} ({{ cat.percentage }}%)</span>
+            </div>
+            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div class="bg-emerald-500 h-full rounded-full" :style="{ width: cat.percentage + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 底部導覽列 -->
+    <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 px-6 py-2 flex justify-between items-center z-10">
+      <button @click="currentTab = 'records'" :class="currentTab === 'records' ? 'text-emerald-600' : 'text-slate-400'" class="flex flex-col items-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+        <span class="text-[10px] mt-1 font-medium">明細</span>
+      </button>
+
+      <!-- 記帳懸浮鈕 -->
+      <button @click="openNewTxModal" class="-mt-5 bg-emerald-600 text-white w-12 h-12 rounded-full shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+      </button>
+
+      <button @click="currentTab = 'accounts'" :class="currentTab === 'accounts' ? 'text-emerald-600' : 'text-slate-400'" class="flex flex-col items-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+        <span class="text-[10px] mt-1 font-medium">帳戶</span>
+      </button>
+
+      <button @click="currentTab = 'reports'" :class="currentTab === 'reports' ? 'text-emerald-600' : 'text-slate-400'" class="flex flex-col items-center">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path></svg>
+        <span class="text-[10px] mt-1 font-medium">報表</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- 新增/修改記帳彈窗 -->
+  <div v-if="showTxModal" class="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+    <div class="bg-white w-full max-w-md rounded-t-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center">
+        <h3 class="text-base font-bold text-slate-800">{{ isEditing ? '修改紀錄' : '新增紀錄' }}</h3>
+        <button @click="showTxModal = false" class="text-slate-400 text-lg">&times;</button>
+      </div>
+
+      <!-- 收支切換 -->
+      <div class="flex bg-slate-100 p-1 rounded-xl">
+        <button @click="txForm.type = 'expense'" :class="txForm.type === 'expense' ? 'bg-white text-rose-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1.5 rounded-lg text-xs transition">支出</button>
+        <button @click="txForm.type = 'income'" :class="txForm.type === 'income' ? 'bg-white text-emerald-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1.5 rounded-lg text-xs transition">收入</button>
+      </div>
+
+      <!-- 金額 -->
+      <div>
+        <label class="text-[11px] font-semibold text-slate-500">金額</label>
+        <input type="number" step="any" v-model.number="txForm.amount" placeholder="0" class="w-full text-2xl font-black py-2 border-b border-slate-200 focus:outline-none focus:border-emerald-500 text-slate-800">
+      </div>
+
+      <!-- 帳戶選擇 -->
+      <div>
+        <label class="text-[11px] font-semibold text-slate-500">帳戶</label>
+        <select v-model="txForm.accountId" class="w-full mt-1 p-2 border rounded-xl text-xs bg-white">
+          <option v-for="acc in accounts" :key="acc.id" :value="acc.id">{{ acc.name }}</option>
+        </select>
+      </div>
+
+      <!-- 類別選擇 -->
+      <div>
+        <label class="text-[11px] font-semibold text-slate-500">類別</label>
+        <div class="grid grid-cols-4 gap-2 mt-1">
+          <button 
+            type="button"
+            v-for="cat in categories" 
+            :key="cat" 
+            @click="txForm.category = cat"
+            :class="txForm.category === cat ? 'bg-emerald-500 text-white font-bold' : 'bg-slate-100 text-slate-600'" 
+            class="py-2 text-xs rounded-xl transition"
+          >
+            {{ cat }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 日期與備註 -->
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[11px] font-semibold text-slate-500">日期</label>
+          <input type="date" v-model="txForm.date" class="w-full mt-1 p-2 border rounded-xl text-xs bg-white">
+        </div>
+        <div>
+          <label class="text-[11px] font-semibold text-slate-500">備註</label>
+          <input type="text" v-model="txForm.note" placeholder="可選填" class="w-full mt-1 p-2 border rounded-xl text-xs">
+        </div>
+      </div>
+
+      <!-- 按鈕 -->
+      <div class="flex gap-2 pt-2">
+        <button v-if="isEditing" @click="deleteTransaction" class="py-3 px-4 bg-rose-50 text-rose-600 rounded-xl font-medium text-xs">刪除</button>
+        <button @click="saveTransaction" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-medium text-xs hover:bg-emerald-700">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增帳戶彈窗 -->
+  <div v-if="showAccountModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4">
+      <h3 class="text-base font-bold text-slate-800">建立新帳戶</h3>
+      <div>
+        <label class="text-[11px] font-semibold text-slate-500">帳戶名稱</label>
+        <input type="text" v-model="accForm.name" placeholder="例如：現金、台新銀行" class="w-full mt-1 p-2 border rounded-xl text-xs">
+      </div>
+      <div>
+        <label class="text-[11px] font-semibold text-slate-500">起始金額</label>
+        <input type="number" v-model.number="accForm.initialBalance" placeholder="0" class="w-full mt-1 p-2 border rounded-xl text-xs">
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button @click="showAccountModal = false" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs">取消</button>
+        <button @click="addAccount" class="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-medium">確認新增</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Firebase Modular SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
+  import { 
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword, signOut 
+  } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-auth.js";
+  import { 
+    getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, 
+    onSnapshot, query, orderBy, serverTimestamp 
+  } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
+
+  // ★★★ 請替換為第一步取得的 Firebase 參數 ★★★
+  const firebaseConfig = {
+    apiKey: "AIzaSyB35EWkIHLcEiF45vclYD59GIAzyNIqEpk",
+  authDomain: "money-7f614.firebaseapp.com",
+  projectId: "money-7f614",
+  storageBucket: "money-7f614.firebasestorage.app",
+  messagingSenderId: "436918525057",
+  appId: "1:436918525057:web:86de6d665d2d06882d0180"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const { createApp, ref, computed, onMounted } = Vue;
+
+  createApp({
+    setup() {
+      const user = ref(null);
+      const authEmail = ref("");
+      const authPassword = ref("");
+      const authError = ref("");
+      const authLoading = ref(false);
+
+      const currentTab = ref("records");
+      const selectedMonth = ref(new Date().toISOString().slice(0, 7)); // YYYY-MM
+      const filterAccount = ref("");
+      const filterCategory = ref("");
+
+      const categories = ["餐飲", "購物", "交通", "娛樂", "居住", "醫療", "薪資", "投資", "其他"];
+
+      const accounts = ref([]);
+      const transactions = ref([]);
+
+      // 監聽器解構函式
+      let unsubAccounts = null;
+      let unsubTransactions = null;
+
+      // 彈窗狀態
+      const showTxModal = ref(false);
+      const isEditing = ref(false);
+      const currentTxId = ref(null);
+      const txForm = ref({
+        type: "expense",
+        amount: null,
+        accountId: "",
+        category: "餐飲",
+        date: new Date().toISOString().slice(0, 10),
+        note: ""
+      });
+
+      const showAccountModal = ref(false);
+      const accForm = ref({ name: "", initialBalance: 0 });
+
+      // 認證監聽
+      onMounted(() => {
+        onAuthStateChanged(auth, (u) => {
+          user.value = u;
+          if (u) {
+            bindRealtimeData(u.uid);
+          } else {
+            if (unsubAccounts) unsubAccounts();
+            if (unsubTransactions) unsubTransactions();
+            accounts.value = [];
+            transactions.value = [];
+          }
+        });
+      });
+
+      // 即時綁定 Firestore (雙向即時同步核心)
+      const bindRealtimeData = (uid) => {
+        const accRef = collection(db, "users", uid, "accounts");
+        unsubAccounts = onSnapshot(accRef, (snap) => {
+          accounts.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          // 首次無帳戶時自動建立預設現金帳戶
+          if (accounts.value.length === 0) {
+            addDoc(accRef, { name: "現金", initialBalance: 0, createdAt: serverTimestamp() });
+          }
+        });
+
+        const txRef = query(collection(db, "users", uid, "transactions"), orderBy("date", "desc"));
+        unsubTransactions = onSnapshot(txRef, (snap) => {
+          transactions.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        });
+      };
+
+      // 認證操作
+      const handleLogin = async () => {
+        authError.value = "";
+        authLoading.value = true;
+        try {
+          await signInWithEmailAndPassword(auth, authEmail.value, authPassword.value);
+        } catch (err) {
+          authError.value = "登入失敗：" + err.message;
+        } finally {
+          authLoading.value = false;
+        }
+      };
+
+      const handleRegister = async () => {
+        authError.value = "";
+        authLoading.value = true;
+        try {
+          await createUserWithEmailAndPassword(auth, authEmail.value, authPassword.value);
+        } catch (err) {
+          authError.value = "註冊失敗：" + err.message;
+        } finally {
+          authLoading.value = false;
+        }
+      };
+
+      const handleLogout = () => signOut(auth);
+
+      // 即時計算帳戶餘額
+      const calculatedAccounts = computed(() => {
+        return accounts.value.map(acc => {
+          const accTxs = transactions.value.filter(t => t.accountId === acc.id);
+          const balance = accTxs.reduce((sum, t) => {
+            return t.type === 'income' ? sum + Number(t.amount) : sum - Number(t.amount);
+          }, Number(acc.initialBalance || 0));
+          return { ...acc, currentBalance: balance };
+        });
+      });
+
+      const totalNetWorth = computed(() => {
+        return calculatedAccounts.value.reduce((sum, acc) => sum + acc.currentBalance, 0);
+      });
+
+      // 篩選本月交易
+      const monthlyTransactions = computed(() => {
+        return transactions.value.filter(t => t.date && t.date.startsWith(selectedMonth.value));
+      });
+
+      const filteredTransactions = computed(() => {
+        return monthlyTransactions.value.filter(t => {
+          const matchAcc = !filterAccount.value || t.accountId === filterAccount.value;
+          const matchCat = !filterCategory.value || t.category === filterCategory.value;
+          return matchAcc && matchCat;
+        });
+      });
+
+      const monthlyIncome = computed(() => {
+        return monthlyTransactions.value
+          .filter(t => t.type === 'income')
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+      });
+
+      const monthlyExpense = computed(() => {
+        return monthlyTransactions.value
+          .filter(t => t.type === 'expense')
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+      });
+
+      const monthlyBalance = computed(() => monthlyIncome.value - monthlyExpense.value);
+
+      // 類別統計報表
+      const categoryStats = computed(() => {
+        const expenses = monthlyTransactions.value.filter(t => t.type === 'expense');
+        const total = monthlyExpense.value;
+        if (total === 0) return [];
+
+        const catMap = {};
+        expenses.forEach(t => {
+          catMap[t.category] = (catMap[t.category] || 0) + Number(t.amount);
+        });
+
+        return Object.keys(catMap).map(cat => ({
+          name: cat,
+          total: catMap[cat],
+          percentage: ((catMap[cat] / total) * 100).toFixed(1)
+        })).sort((a, b) => b.total - a.total);
+      });
+
+      // 工具函式
+      const formatNumber = (num) => Math.round(num || 0).toLocaleString();
+      const getAccountName = (id) => {
+        const acc = accounts.value.find(a => a.id === id);
+        return acc ? acc.name : "未知帳戶";
+      };
+
+      // 記帳操作
+      const openNewTxModal = () => {
+        isEditing.value = false;
+        currentTxId.value = null;
+        txForm.value = {
+          type: "expense",
+          amount: null,
+          accountId: accounts.value[0]?.id || "",
+          category: "餐飲",
+          date: new Date().toISOString().slice(0, 10),
+          note: ""
+        };
+        showTxModal.value = true;
+      };
+
+      const openEditModal = (item) => {
+        isEditing.value = true;
+        currentTxId.value = item.id;
+        txForm.value = { ...item };
+        showTxModal.value = true;
+      };
+
+      const saveTransaction = async () => {
+        if (!txForm.value.amount || txForm.value.amount <= 0) return alert("請輸入正確金額");
+        if (!txForm.value.accountId) return alert("請選擇帳戶");
+
+        const data = { ...txForm.value, amount: Number(txForm.value.amount) };
+        const colRef = collection(db, "users", user.value.uid, "transactions");
+
+        if (isEditing.value) {
+          await updateDoc(doc(colRef, currentTxId.value), data);
+        } else {
+          await addDoc(colRef, { ...data, createdAt: serverTimestamp() });
+        }
+        showTxModal.value = false;
+      };
+
+      const deleteTransaction = async () => {
+        if (confirm("確定要刪除這筆紀錄嗎？")) {
+          await deleteDoc(doc(db, "users", user.value.uid, "transactions", currentTxId.value));
+          showTxModal.value = false;
+        }
+      };
+
+      // 帳戶操作
+      const addAccount = async () => {
+        if (!accForm.value.name) return alert("請輸入帳戶名稱");
+        await addDoc(collection(db, "users", user.value.uid, "accounts"), {
+          name: accForm.value.name,
+          initialBalance: Number(accForm.value.initialBalance || 0),
+          createdAt: serverTimestamp()
+        });
+        accForm.value = { name: "", initialBalance: 0 };
+        showAccountModal.value = false;
+      };
+
+      const deleteAccount = async (accId) => {
+        if (accounts.value.length <= 1) return alert("至少必須保留一個帳戶");
+        if (confirm("刪除帳戶不會刪除關聯明細，確定刪除嗎？")) {
+          await deleteDoc(doc(db, "users", user.value.uid, "accounts", accId));
+        }
+      };
+
+      return {
+        user, authEmail, authPassword, authError, authLoading,
+        handleLogin, handleRegister, handleLogout,
+        currentTab, selectedMonth, filterAccount, filterCategory,
+        categories, accounts, calculatedAccounts, totalNetWorth,
+        filteredTransactions, monthlyIncome, monthlyExpense, monthlyBalance,
+        categoryStats, formatNumber, getAccountName,
+        showTxModal, isEditing, txForm, openNewTxModal, openEditModal, saveTransaction, deleteTransaction,
+        showAccountModal, accForm, addAccount, deleteAccount
+      };
+    }
+  }).mount("#app");
+</script>
+</body>
+</html>
