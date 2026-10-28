@@ -24,7 +24,7 @@
     .category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
     .category-tile { touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; position:relative; min-width:0; height:64px; overflow:visible; border:0; border-radius:0; background:transparent; box-shadow:none; transition:transform .16s ease; }
     .category-tile:active { transform:scale(.97); }
-    .category-tile > button:first-child { border-radius:12px; background:var(--accent-soft); color:var(--accent-dark); }
+    .category-tile > button:first-child { border:0; border-radius:12px; background:var(--accent); color:#fff; box-shadow:none; }
     .category-tile > button:first-child span { font-size:13px; line-height:1.35; font-weight:650; letter-spacing:.01em; }
     .category-dragging { opacity:.72; z-index:5; transform:scale(1.06) rotate(1deg); outline:2px solid var(--accent); }
     .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
@@ -43,6 +43,9 @@
     .edit-field { border:2px solid #facc15 !important; border-radius:8px; padding:4px 6px; background:#fff; min-width:0; max-width:100%; box-shadow:0 0 0 1px rgba(250,204,21,.10); }
     .edit-field:focus { outline:none; border-color:#eab308 !important; box-shadow:0 0 0 3px rgba(250,204,21,.22); }
     .month-nav-btn { border:1px solid #e2e8f0; background:#fff; border-radius:10px; padding:6px 10px; font-weight:700; }
+    .month-picker-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+    .month-picker-item { padding:9px 4px; border-radius:10px; background:#f1f5f9; font-size:12px; }
+    .month-picker-item.active { background:var(--accent); color:#fff; font-weight:700; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased pb-24">
@@ -113,8 +116,16 @@
               </div>
             </div>
           </div>
-          <div v-else class="bg-white/20 text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-white/30">
-            {{ selectedYear }} 全年度
+          <div v-else class="relative">
+            <button @click="showYearPicker = !showYearPicker" class="bg-white/20 text-white text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-white/30">{{ selectedYear }} 全年度 ▾</button>
+            <div v-if="showYearPicker" class="absolute left-0 mt-2 bg-white text-slate-800 rounded-2xl p-3 shadow-xl z-30 w-48 border border-slate-100">
+              <div class="flex justify-between items-center gap-2">
+                <button @click="selectedYear--; showYearPicker = true" class="px-2 py-2 text-xs font-bold">‹ {{ selectedYear - 1 }}</button>
+                <span class="text-sm font-bold">{{ selectedYear }} 年</span>
+                <button @click="selectedYear++; showYearPicker = true" class="px-2 py-2 text-xs font-bold">{{ selectedYear + 1 }} ›</button>
+              </div>
+              <button @click="selectedYear = new Date().getFullYear(); showYearPicker = false" class="mt-2 w-full rounded-lg bg-slate-100 py-2 text-xs">回到今年</button>
+            </div>
           </div>
 
           <!-- 右上角 本月 / 全年度 切換按鈕 -->
@@ -141,12 +152,24 @@
     </div>
 
     <!-- 標籤頁 1：收支明細 (帶小按鈕多選過濾) -->
-    <main v-if="currentTab === 'records'" class="flex-1 p-4 space-y-4">
+    <main v-if="currentTab === 'records'" class="flex-1 p-4 space-y-4" @click="handleRecordsOutsideClick($event)">
       <!-- 篩選列：收入/支出切換與小按鈕矩陣 -->
       <div class="bg-white p-3 rounded-2xl border border-slate-100 space-y-2 shadow-xs">
         <div class="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
           <button class="month-nav-btn" :disabled="!!editingRecordId" @click="shiftRecordsMonth(-1)">‹ 上月</button>
-          <div class="text-sm font-bold text-slate-700">{{ recordsYear }} 年 {{ String(recordsMonth).padStart(2, '0') }} 月</div>
+          <div class="relative">
+            <button class="text-sm font-bold text-slate-700 px-2 py-1 rounded-lg" :disabled="!!editingRecordId" @click="showRecordsMonthPicker = !showRecordsMonthPicker">{{ recordsYear }}年{{ String(recordsMonth).padStart(2, '0') }}月 ▾</button>
+            <div v-if="showRecordsMonthPicker" class="absolute left-1/2 -translate-x-1/2 top-full mt-2 bg-white text-slate-800 rounded-2xl p-3 shadow-xl z-30 w-64 border border-slate-100" @click.stop>
+              <div class="flex justify-between items-center mb-2 pb-2 border-b">
+                <button @click="recordsYear--; showRecordsMonthPicker = true" class="px-2 py-1 text-xs font-bold">‹ {{ recordsYear - 1 }}</button>
+                <span class="text-xs font-bold">{{ recordsYear }} 年</span>
+                <button @click="recordsYear++; showRecordsMonthPicker = true" class="px-2 py-1 text-xs font-bold">{{ recordsYear + 1 }} ›</button>
+              </div>
+              <div class="month-picker-grid">
+                <button v-for="m in 12" :key="m" @click="recordsMonth = m; showRecordsMonthPicker = false" :class="['month-picker-item', recordsMonth === m ? 'active' : '']">{{ m }}月</button>
+              </div>
+            </div>
+          </div>
           <button class="month-nav-btn" :disabled="!!editingRecordId" @click="shiftRecordsMonth(1)">下月 ›</button>
         </div>
         <div class="flex bg-slate-100 p-1 rounded-xl">
@@ -182,7 +205,7 @@
           此區間目前尚無紀錄，點選下方首頁開始記帳
         </div>
         <div v-for="item in sortedTransactions" :key="item.id"
-          class="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs select-none">
+          :data-record-id="item.id" class="record-item bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs select-none">
           <div class="flex items-center justify-between gap-2" @pointerdown="startLongPress(item)" @pointerup="cancelLongPress" @pointerleave="cancelLongPress" @pointercancel="cancelLongPress">
             <div class="min-w-0 flex-1" @contextmenu.prevent>
               <template v-if="editingRecordId === item.id">
@@ -203,8 +226,8 @@
               <div class="mt-1 text-[10px] text-slate-400">{{ item.type === 'income' ? '收入' : '支出' }}</div>
             </div>
             <div v-if="editingRecordId === item.id" class="flex flex-row gap-1 shrink-0">
-              <button @click.stop="saveInlineEdit(item)" class="save-mini" aria-label="儲存" title="儲存">✓</button>
-              <button @click.stop="deleteTransactionFromList(item)" class="w-[30px] h-[30px] rounded-lg bg-rose-600 text-white flex items-center justify-center" aria-label="刪除" title="刪除">×</button>
+              <button @click.stop="saveInlineEdit(item)" class="save-mini px-2 text-[11px]" aria-label="儲存" title="儲存">儲存</button>
+              <button @click.stop="deleteTransactionFromList(item)" class="h-[30px] px-2 rounded-lg bg-rose-600 text-white text-[11px] font-bold flex items-center justify-center" aria-label="刪除" title="刪除">刪除</button>
               <button @click.stop="cancelInlineEdit(item)" class="text-[10px] text-slate-500 underline">取消</button>
             </div>
             <div v-else class="flex flex-col gap-1 shrink-0">
@@ -394,6 +417,8 @@
       const selectedYear = ref(new Date().getFullYear());
       const selectedMonthNum = ref(new Date().getMonth() + 1);
       const showMonthPicker = ref(false);
+      const showYearPicker = ref(false);
+      const showRecordsMonthPicker = ref(false);
       const isInstalled = ref(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
       const sortOrder = ref('desc'), deleteOptionTxId = ref(null), draggingCategory = ref(null), dragOverTarget = ref(null);
       const categoryDeleteMode = ref(false);
@@ -531,10 +556,21 @@
         alert('這筆明細尚未儲存，請先按儲存或取消。');
         return false;
       };
+      const handleRecordsOutsideClick = event => {
+        if (!editingRecordId.value) return;
+        const card = event.target.closest('.record-item');
+        if (card && card.dataset.recordId === String(editingRecordId.value)) return;
+        const item = transactions.value.find(t => t.id === editingRecordId.value);
+        if (!item) { editingRecordId.value = null; return; }
+        if (!itemEditChanged(item)) { clearInlineDraft(item); return; }
+        event.stopPropagation();
+        alert('這筆明細已修改，請先按「儲存」或「取消」後再離開編輯。');
+      };
       const shiftRecordsMonth = delta => {
         if (!ensureCanLeaveEdit()) return;
         const d = new Date(recordsYear.value, recordsMonth.value - 1 + delta, 1);
         recordsYear.value = d.getFullYear(); recordsMonth.value = d.getMonth() + 1;
+        showRecordsMonthPicker.value = false;
       };
       const openRecords = () => {
         if (!ensureCanLeaveEdit()) return;
@@ -883,7 +919,7 @@
         user, authEmail, authPassword, authError, authLoading,
         handleLogin, handleRegister, handleLogout,
         currentTab, homeTab, timeMode, selectedYear, selectedMonthNum, showMonthPicker, selectMonth, goToCurrentMonth,
-        recordsYear, recordsMonth, shiftRecordsMonth, openRecords, switchTab,
+        recordsYear, recordsMonth, shiftRecordsMonth, showRecordsMonthPicker, showYearPicker, handleRecordsOutsideClick, openRecords, switchTab,
         defaultExpenseCats, defaultIncomeCats, customExpenseCats, customIncomeCats, allExpenseCats, allIncomeCats,
         visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory, themeOptions, activeTheme, setTheme,
         categoryLongPressed, startCategoryPointerDrag, moveCategoryPointerDrag, finishCategoryPointerDrag, onCategoryTileClick,
