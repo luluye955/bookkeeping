@@ -26,14 +26,15 @@
     .category-tile:active { transform:scale(.97); }
     .category-tile > button:first-child { box-sizing:border-box; width:64px; height:64px; min-width:0; margin:3px auto; display:flex; align-items:center; justify-content:center; border:3px solid var(--category-border) !important; border-radius:22px !important; background:var(--category-bg) !important; color:var(--category-text) !important; box-shadow:none !important; padding:4px; white-space:normal; }
     .category-tile > button:first-child span { font-size:12px; line-height:1.25; font-weight:650; letter-spacing:.01em; overflow-wrap:anywhere; }
+    .category-add-button { box-sizing:border-box; width:64px; height:64px; min-width:0; margin:3px auto; padding:4px !important; border:0 !important; border-radius:22px !important; box-shadow:none !important; }
     .category-dragging { opacity:.72; z-index:5; transform:scale(1.06) rotate(1deg); outline:2px solid var(--accent); }
     .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
     .category-tile.is-long-press { outline:2px solid var(--accent); outline-offset:1px; }
     .category-grid > * { transition:transform .16s ease; }
-    .theme-swatch { width:22px; height:22px; flex:0 0 22px; border-radius:999px; border:2px solid #ffffff; box-shadow:0 0 0 1px #cbd5e1; }
-    .border-swatch { width:22px; height:22px; flex:0 0 22px; border-radius:999px; border:3px solid var(--swatch-color); background:#fff; box-shadow:0 0 0 1px #cbd5e1; }
-    .border-swatch.selected { outline:2px solid #facc15; outline-offset:2px; }
-    .theme-swatch.selected { outline:2px solid #facc15; outline-offset:2px; }
+    .theme-swatch { width:28px; height:28px; flex:0 0 28px; border-radius:10px; border:1px solid #d1d5db; box-shadow:none; }
+    .border-swatch { width:28px; height:28px; flex:0 0 28px; box-sizing:border-box; border-radius:10px; border:3px solid var(--swatch-color); background:#fff; box-shadow:none; }
+    .border-swatch.selected { outline:2px solid #facc15; outline-offset:1px; }
+    .theme-swatch.selected { outline:2px solid #facc15; outline-offset:1px; }
     .save-mini { width:auto; min-width:38px; height:30px; flex:0 0 auto; white-space:nowrap; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background:var(--accent); color:white; font-weight:700; padding:0 5px; }
     .edit-action-row { display:flex; flex-direction:row; align-items:center; gap:4px; flex:0 0 auto; white-space:nowrap; }
     .edit-amount-column { width:5.5rem; flex:0 0 5.5rem; min-width:0; text-align:right; }
@@ -271,7 +272,7 @@
           </button>
           <button v-if="categoryDeleteMode" @click.stop="deleteCategory(cat)" :aria-label="'刪除分類 '+cat" class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 text-white text-sm leading-none shadow">×</button>
         </div>
-        <button @click="openAddCatModal(homeTab)" class="theme-action-soft p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 press-feedback h-16">
+        <button @click="openAddCatModal(homeTab)" class="category-add-button theme-action-soft flex flex-col items-center justify-center gap-1.5 press-feedback">
           <span class="text-xs font-semibold truncate w-full text-center">＋ 新增</span>
         </button>
       </div>
@@ -434,13 +435,13 @@
         {id:'mint',name:'薄荷綠',color:'#E1F3E8',text:'#26734D',accent:'#43875E',dark:'#26734D',soft:'#E1F3E8'},
         {id:'sky',name:'天空藍',color:'#E3EDFF',text:'#315EA8',accent:'#4778C7',dark:'#315EA8',soft:'#E3EDFF'},
         {id:'lavender',name:'薰衣草紫',color:'#F0E6FF',text:'#7544A6',accent:'#9163BD',dark:'#7544A6',soft:'#F0E6FF'},
-        {id:'cream',name:'奶油橘',color:'#FFF0D9',text:'#98601C',accent:'#D18A35',dark:'#98601C',soft:'#FFF0D9'}
+        {id:'pink',name:'粉紅',color:'#FCE4EC',text:'#AD1457',accent:'#D81B60',dark:'#AD1457',soft:'#FCE4EC'}
       ];
       const borderOptions = [
-        {id:'red',name:'深紅',color:'#8B0000'},
+        {id:'red',name:'亮紅',color:'#FF1744'},
         {id:'orange',name:'深橘',color:'#C65D00'},
         {id:'black',name:'黑色',color:'#222222'},
-        {id:'blue',name:'深藍',color:'#123B70'}
+        {id:'purple',name:'深紫',color:'#4B1F73'}
       ];
       const activeTheme = ref(localStorage.getItem('bookkeepingTheme') || 'mint');
       const activeBorder = ref(localStorage.getItem('bookkeepingBorder') || 'red');
