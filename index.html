@@ -31,6 +31,9 @@
     .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
     .category-tile.is-long-press { outline:2px solid var(--accent); outline-offset:1px; }
     .category-grid > * { transition:transform .16s ease; }
+    .detail-cat-button { touch-action:pan-x; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+    .detail-cat-button.detail-cat-dragging { opacity:.65; outline:2px solid var(--accent); }
+    .detail-cat-button.detail-cat-drop-target { outline:2px solid var(--accent); outline-offset:1px; }
     .theme-swatch { width:28px; height:28px; flex:0 0 28px; border-radius:10px; border:1px solid #d1d5db; box-shadow:none; }
     .border-swatch { width:28px; height:28px; flex:0 0 28px; box-sizing:border-box; border-radius:10px; border:3px solid var(--swatch-color); background:#fff; box-shadow:none; }
     .border-swatch.selected { outline:2px solid #facc15; outline-offset:1px; }
@@ -184,7 +187,7 @@
         <p class="text-[10px] text-slate-400">點選類別按鈕以顯示個別種類總額，可複選。</p>
         <div class="flex gap-1.5 overflow-x-auto pb-1">
           <button :disabled="!!editingRecordId" @click="detailSelectedCats = []" :class="detailSelectedCats.length === 0 ? 'selected font-bold' : ''" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">全部</button>
-          <button v-for="cat in (detailFilterType === 'expense' ? allExpenseCats : allIncomeCats)" :key="cat" :disabled="!!editingRecordId" @click="toggleDetailCat(cat)" :class="detailSelectedCats.includes(cat) ? 'selected font-bold' : ''" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">
+          <button v-for="cat in orderedDetailCats" :key="cat" :data-detail-category="cat" :disabled="!!editingRecordId" @click="toggleDetailCat(cat)" @pointerdown="startDetailCategoryDrag(cat, $event)" @pointermove="moveDetailCategoryDrag(cat, $event)" @pointerup="finishDetailCategoryDrag($event)" @pointercancel="finishDetailCategoryDrag($event)" :class="[detailSelectedCats.includes(cat) ? 'selected font-bold' : '', detailDraggingCategory === cat ? 'detail-cat-dragging' : '', detailDragOverTarget === cat ? 'detail-cat-drop-target' : '']" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">
             {{ cat }}
           </button>
         </div>
@@ -470,6 +473,9 @@
       let categoryPressTimer = null, categoryPointerStart = null, suppressCategoryClick = false;
       const longPressTimer = ref(null), longPressTriggered = ref(false);
       const homeExpenseOrder = ref([]), homeIncomeOrder = ref([]);
+      const detailExpenseOrder = ref([]), detailIncomeOrder = ref([]);
+      const detailDraggingCategory = ref(null), detailDragOverTarget = ref(null);
+      let detailCategoryPressTimer = null, detailCategoryPointerStart = null, suppressDetailCategoryClick = false;
       const hiddenExpenseCats = ref([]), hiddenIncomeCats = ref([]);
       const installPWA = () => window.__promptInstallPWA?.();
       window.addEventListener('appinstalled', () => { isInstalled.value = true; });
@@ -489,6 +495,7 @@
         await setDoc(doc(db, "users", user.value.uid, "settings", "categories"), {
           expense: customExpenseCats.value, income: customIncomeCats.value,
           orderExpense: homeExpenseOrder.value, orderIncome: homeIncomeOrder.value,
+          detailOrderExpense: detailExpenseOrder.value, detailOrderIncome: detailIncomeOrder.value,
           hiddenExpense: hiddenExpenseCats.value, hiddenIncome: hiddenIncomeCats.value
         }, { merge: true });
       };
@@ -659,6 +666,17 @@
       const customIncomeCats = ref([]);
       const allExpenseCats = computed(() => [...defaultExpenseCats, ...customExpenseCats.value].filter(c => !hiddenExpenseCats.value.includes(c)));
       const allIncomeCats = computed(() => [...defaultIncomeCats, ...customIncomeCats.value].filter(c => !hiddenIncomeCats.value.includes(c)));
+      const orderedDetailCats = computed(() => {
+        const cats = detailFilterType.value === 'expense' ? allExpenseCats.value : allIncomeCats.value;
+        const order = detailFilterType.value === 'expense' ? detailExpenseOrder.value : detailIncomeOrder.value;
+        return [...cats].sort((a,b) => {
+          const ai = order.indexOf(a), bi = order.indexOf(b);
+          if (ai < 0 && bi < 0) return cats.indexOf(a) - cats.indexOf(b);
+          if (ai < 0) return 1;
+          if (bi < 0) return -1;
+          return ai - bi;
+        });
+      });
       const visibleHomeCategories = computed(() => {
         const all = homeTab.value === 'expense' ? allExpenseCats.value : allIncomeCats.value;
         const hidden = homeTab.value === 'expense' ? hiddenExpenseCats.value : hiddenIncomeCats.value;
@@ -681,12 +699,54 @@
       const detailSelectedCats = ref([]);
 
       const toggleDetailCat = (cat) => {
+        if (suppressDetailCategoryClick) { suppressDetailCategoryClick = false; return; }
         const idx = detailSelectedCats.value.indexOf(cat);
         if (idx > -1) {
           detailSelectedCats.value.splice(idx, 1);
         } else {
           detailSelectedCats.value.push(cat);
         }
+      };
+      const startDetailCategoryDrag = (cat, event) => {
+        if (editingRecordId.value || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        detailCategoryPointerStart = { cat, x:event.clientX, y:event.clientY, pointerId:event.pointerId };
+        clearTimeout(detailCategoryPressTimer);
+        detailCategoryPressTimer = setTimeout(() => {
+          if (!detailCategoryPointerStart || detailCategoryPointerStart.pointerId !== event.pointerId) return;
+          suppressDetailCategoryClick = true;
+          detailDraggingCategory.value = cat;
+          detailDragOverTarget.value = cat;
+          if (navigator.vibrate) navigator.vibrate(25);
+        }, 450);
+      };
+      const moveDetailCategoryDrag = (cat, event) => {
+        if (!detailCategoryPointerStart || detailCategoryPointerStart.pointerId !== event.pointerId) return;
+        if (!detailDraggingCategory.value) {
+          if (Math.hypot(event.clientX-detailCategoryPointerStart.x, event.clientY-detailCategoryPointerStart.y) > 12) {
+            clearTimeout(detailCategoryPressTimer); detailCategoryPointerStart = null;
+          }
+          return;
+        }
+        event.preventDefault();
+        const el = document.elementFromPoint(event.clientX,event.clientY)?.closest('[data-detail-category]');
+        const target = el?.getAttribute('data-detail-category');
+        if (!target || target === detailDraggingCategory.value) return;
+        const order = detailFilterType.value === 'expense' ? detailExpenseOrder : detailIncomeOrder;
+        const current = [...orderedDetailCats.value];
+        const from = current.indexOf(detailDraggingCategory.value), to = current.indexOf(target);
+        if (from < 0 || to < 0) return;
+        current.splice(from,1); current.splice(to,0,detailDraggingCategory.value);
+        order.value = current;
+        detailDragOverTarget.value = target;
+      };
+      const finishDetailCategoryDrag = async (event) => {
+        clearTimeout(detailCategoryPressTimer);
+        const wasDragging = !!detailDraggingCategory.value;
+        if (wasDragging && user.value) await persistCategorySettings();
+        detailCategoryPointerStart = null;
+        detailDraggingCategory.value = null;
+        detailDragOverTarget.value = null;
+        if (wasDragging) setTimeout(() => { suppressDetailCategoryClick = false; }, 250);
       };
 
       // 彈窗狀態
@@ -736,11 +796,14 @@
             customIncomeCats.value = snap.data().income || [];
             homeExpenseOrder.value = snap.data().orderExpense || [];
             homeIncomeOrder.value = snap.data().orderIncome || [];
+            detailExpenseOrder.value = snap.data().detailOrderExpense || [];
+            detailIncomeOrder.value = snap.data().detailOrderIncome || [];
             hiddenExpenseCats.value = snap.data().hiddenExpense || [];
             hiddenIncomeCats.value = snap.data().hiddenIncome || [];
           } else {
             customExpenseCats.value = []; customIncomeCats.value = [];
             homeExpenseOrder.value = []; homeIncomeOrder.value = [];
+            detailExpenseOrder.value = []; detailIncomeOrder.value = [];
             hiddenExpenseCats.value = []; hiddenIncomeCats.value = [];
           }
         });
@@ -826,7 +889,7 @@
 
       // 支出報表統計
       const categoryStats = computed(() => {
-        const expenses = recordsMonthTransactions.value.filter(t => t.type === 'expense');
+        const expenses = timeFilteredTransactions.value.filter(t => t.type === 'expense');
         const total = expenses.reduce((sum, t) => sum + Number(t.amount || 0), 0);
         if (total === 0) return [];
 
@@ -963,7 +1026,7 @@
         defaultExpenseCats, defaultIncomeCats, customExpenseCats, customIncomeCats, allExpenseCats, allIncomeCats,
         visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory, themeOptions, activeTheme, setTheme, borderOptions, activeBorder, setBorder,
         categoryLongPressed, startCategoryPointerDrag, moveCategoryPointerDrag, finishCategoryPointerDrag, onCategoryTileClick,
-        detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, editingRecordId, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, ensureCanLeaveEdit,
+        detailFilterType, detailSelectedCats, toggleDetailCat, orderedDetailCats, detailDraggingCategory, detailDragOverTarget, startDetailCategoryDrag, moveDetailCategoryDrag, finishDetailCategoryDrag, sortOrder, filteredTotal, sortedTransactions, editingRecordId, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, ensureCanLeaveEdit,
         filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
         showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, closeTxModalIfEmpty, handleRecordClick,
         startLongPress, cancelLongPress, deleteOptionTxId, deleteTransactionFromList, saveTransaction, deleteTransaction,
