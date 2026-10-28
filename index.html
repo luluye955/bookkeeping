@@ -319,7 +319,7 @@
   </div>
 
   <!-- 點擊大按鈕後直接彈出的金額與備註輸入框 -->
-  <div v-if="showTxModal" class="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+  <div v-if="showTxModal" @click.self="closeTxModalIfEmpty" class="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
     <div class="bg-white w-full max-w-md rounded-t-3xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center">
         <div class="flex items-center gap-2">
@@ -351,7 +351,7 @@
   </div>
 
   <!-- 新增自訂分類彈窗 -->
-  <div v-if="showCatModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div v-if="showCatModal" @click.self="closeCatModalIfEmpty" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
     <div class="bg-white w-full max-w-sm rounded-3xl p-5 space-y-4">
       <h3 class="text-base font-bold text-slate-800">新增{{ newCatType === 'expense' ? '支出' : '收入' }}自訂分類</h3>
       <div>
@@ -441,7 +441,7 @@
         {id:'red',name:'亮紅',color:'#FF1744'},
         {id:'orange',name:'深橘',color:'#C65D00'},
         {id:'black',name:'黑色',color:'#222222'},
-        {id:'purple',name:'深紫',color:'#4B1F73'}
+        {id:'yellow',name:'重色黃',color:'#C99700'}
       ];
       const activeTheme = ref(localStorage.getItem('bookkeepingTheme') || 'mint');
       const activeBorder = ref(localStorage.getItem('bookkeepingBorder') || 'red');
@@ -865,6 +865,17 @@
         });
       };
 
+      // 點擊彈窗外部時，只在尚未輸入資料的情況下自動關閉
+      const closeTxModalIfEmpty = () => {
+        const hasAmount = txForm.value.amount !== null && txForm.value.amount !== undefined && String(txForm.value.amount).trim() !== '';
+        const hasNote = String(txForm.value.note || '').trim() !== '';
+        if (!isEditing.value && !hasAmount && !hasNote) showTxModal.value = false;
+      };
+
+      const closeCatModalIfEmpty = () => {
+        if (!String(newCatName.value || '').trim()) showCatModal.value = false;
+      };
+
       const saveTransaction = async () => {
         if (!txForm.value.amount || txForm.value.amount <= 0) return alert("請輸入正確金額");
 
@@ -947,9 +958,9 @@
         categoryLongPressed, startCategoryPointerDrag, moveCategoryPointerDrag, finishCategoryPointerDrag, onCategoryTileClick,
         detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, editingRecordId, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, ensureCanLeaveEdit,
         filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
-        showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, handleRecordClick,
+        showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, closeTxModalIfEmpty, handleRecordClick,
         startLongPress, cancelLongPress, deleteOptionTxId, deleteTransactionFromList, saveTransaction, deleteTransaction,
-        showCatModal, newCatType, newCatName, openAddCatModal, saveCustomCategory, isInstalled, installPWA
+        showCatModal, newCatType, newCatName, openAddCatModal, closeCatModalIfEmpty, saveCustomCategory, isInstalled, installPWA
       };
     }
   }).mount("#app");
