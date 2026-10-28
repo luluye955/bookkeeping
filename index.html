@@ -526,12 +526,18 @@
         try {
           for (const item of related) await deleteDoc(doc(db, "users", user.value.uid, "transactions", item.id));
           if (type === 'expense') {
-            customExpenseCats.value = customExpenseCats.value.filter(c => c !== cat);
-            hiddenExpenseCats.value = hiddenExpenseCats.value.filter(c => c !== cat);
+            if (defaultExpenseCats.includes(cat)) {
+              if (!hiddenExpenseCats.value.includes(cat)) hiddenExpenseCats.value.push(cat);
+            } else {
+              customExpenseCats.value = customExpenseCats.value.filter(c => c !== cat);
+            }
             homeExpenseOrder.value = homeExpenseOrder.value.filter(c => c !== cat);
           } else {
-            customIncomeCats.value = customIncomeCats.value.filter(c => c !== cat);
-            hiddenIncomeCats.value = hiddenIncomeCats.value.filter(c => c !== cat);
+            if (defaultIncomeCats.includes(cat)) {
+              if (!hiddenIncomeCats.value.includes(cat)) hiddenIncomeCats.value.push(cat);
+            } else {
+              customIncomeCats.value = customIncomeCats.value.filter(c => c !== cat);
+            }
             homeIncomeOrder.value = homeIncomeOrder.value.filter(c => c !== cat);
           }
           await persistCategorySettings();
@@ -651,8 +657,8 @@
       const defaultIncomeCats = ["薪資", "副業", "投資", "其他"];
       const customExpenseCats = ref([]);
       const customIncomeCats = ref([]);
-      const allExpenseCats = computed(() => [...defaultExpenseCats, ...customExpenseCats.value]);
-      const allIncomeCats = computed(() => [...defaultIncomeCats, ...customIncomeCats.value]);
+      const allExpenseCats = computed(() => [...defaultExpenseCats, ...customExpenseCats.value].filter(c => !hiddenExpenseCats.value.includes(c)));
+      const allIncomeCats = computed(() => [...defaultIncomeCats, ...customIncomeCats.value].filter(c => !hiddenIncomeCats.value.includes(c)));
       const visibleHomeCategories = computed(() => {
         const all = homeTab.value === 'expense' ? allExpenseCats.value : allIncomeCats.value;
         const hidden = homeTab.value === 'expense' ? hiddenExpenseCats.value : hiddenIncomeCats.value;
@@ -877,6 +883,7 @@
       };
 
       const saveTransaction = async () => {
+        if (navigator.vibrate) navigator.vibrate(25);
         if (!txForm.value.amount || txForm.value.amount <= 0) return alert("請輸入正確金額");
 
         const data = { ...txForm.value, amount: Number(txForm.value.amount) };
