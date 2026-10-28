@@ -20,17 +20,25 @@
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
     @keyframes install-glow { 0%,100% { box-shadow: 0 0 0 0 rgba(250,204,21,.15); border-color:#fef08a; } 50% { box-shadow: 0 0 12px 4px rgba(250,204,21,.65); border-color:#facc15; } }
     .install-glow { animation: install-glow 1.25s ease-in-out infinite; border: 2px solid #fef08a !important; }
-    /* 首頁分類按鈕：卡片感、觸控回饋與拖曳時的即時位移 */
+    :root { --accent:#10b981; --accent-dark:#047857; --accent-soft:#d1fae5; }
     .category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-    .category-tile { touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; position:relative; min-width:0; height:104px; overflow:visible; border:1px solid #e2e8f0; border-radius:20px; background:linear-gradient(160deg,#ffffff 0%,#f1f5f9 100%); box-shadow:0 4px 10px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04); transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease, opacity .16s ease; }
-    .category-tile:active { box-shadow:0 6px 14px rgba(15,23,42,.13); }
-    .category-tile > button:first-child { border-radius:20px; }
-    .category-icon { display:flex; width:43px; height:43px; align-items:center; justify-content:center; border-radius:15px; background:linear-gradient(145deg,#d1fae5,#a7f3d0); color:#065f46; font-size:25px; line-height:1; box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 2px 4px rgba(15,23,42,.08); }
-    .category-label { max-width:100%; font-size:12px; line-height:1.25; font-weight:700; letter-spacing:.01em; color:#334155; }
-    .category-dragging { opacity:.82; z-index:5; transform:scale(1.04) rotate(1deg); border-color:#10b981; box-shadow:0 12px 24px rgba(16,185,129,.25); }
-    .category-drop-target { outline:3px solid #10b981; outline-offset:1px; transform:scale(.94); background:#ecfdf5; }
-    .category-tile.is-long-press { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.18),0 8px 18px rgba(15,23,42,.12); }
+    .category-tile { touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; position:relative; min-width:0; height:64px; overflow:visible; border:0; border-radius:0; background:transparent; box-shadow:none; transition:transform .16s ease; }
+    .category-tile:active { transform:scale(.97); }
+    .category-tile > button:first-child { border-radius:12px; background:var(--accent-soft); color:var(--accent-dark); }
+    .category-tile > button:first-child span { font-size:13px; line-height:1.35; font-weight:650; letter-spacing:.01em; }
+    .category-dragging { opacity:.72; z-index:5; transform:scale(1.06) rotate(1deg); outline:2px solid var(--accent); }
+    .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
+    .category-tile.is-long-press { outline:2px solid var(--accent); outline-offset:1px; }
     .category-grid > * { transition:transform .16s ease; }
+    .theme-swatch { width:26px; height:26px; border-radius:6px; border:2px solid transparent; box-shadow:0 1px 3px #0002; }
+    .theme-swatch.selected { outline:2px solid #facc15; outline-offset:2px; }
+    .save-mini { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; background:var(--accent); color:white; font-weight:700; }
+    .detail-cat-button { background:var(--accent-soft); color:var(--accent-dark); }
+    .detail-cat-button.selected { background:var(--accent); color:white; }
+    .theme-summary { background:linear-gradient(135deg,var(--accent),var(--accent-dark)); }
+    .theme-action { background:var(--accent); color:white; }
+    .theme-action-soft { background:var(--accent-soft); color:var(--accent-dark); }
+    .press-feedback:active { filter:brightness(.92); }
     /* 黃色欄位邊框：用 !important 避免被 Tailwind 邊框樣式蓋掉 */
     .edit-field { border:2px solid #facc15 !important; border-radius:8px; padding:4px 6px; background:#fff; min-width:0; max-width:100%; box-shadow:0 0 0 1px rgba(250,204,21,.10); }
     .edit-field:focus { outline:none; border-color:#eab308 !important; box-shadow:0 0 0 3px rgba(250,204,21,.22); }
@@ -84,7 +92,7 @@
 
     <!-- 共用頂部卡片 (金額與時間切換) -->
     <div v-if="currentTab !== 'records'" class="p-4 pb-0">
-      <div class="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-3xl p-5 shadow-md">
+      <div class="theme-summary text-white rounded-3xl p-5 shadow-md">
         <div class="flex justify-between items-center mb-3">
           <!-- 左上角月份選擇 (僅本月模式啟用) -->
           <div v-if="timeMode === 'month'" class="relative">
@@ -137,18 +145,18 @@
       <!-- 篩選列：收入/支出切換與小按鈕矩陣 -->
       <div class="bg-white p-3 rounded-2xl border border-slate-100 space-y-2 shadow-xs">
         <div class="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
-          <button class="month-nav-btn" @click="shiftRecordsMonth(-1)">‹ 上月</button>
+          <button class="month-nav-btn" :disabled="!!editingRecordId" @click="shiftRecordsMonth(-1)">‹ 上月</button>
           <div class="text-sm font-bold text-slate-700">{{ recordsYear }} 年 {{ String(recordsMonth).padStart(2, '0') }} 月</div>
-          <button class="month-nav-btn" @click="shiftRecordsMonth(1)">下月 ›</button>
+          <button class="month-nav-btn" :disabled="!!editingRecordId" @click="shiftRecordsMonth(1)">下月 ›</button>
         </div>
         <div class="flex bg-slate-100 p-1 rounded-xl">
-          <button @click="detailFilterType = 'expense'; detailSelectedCats = []" :class="detailFilterType === 'expense' ? 'bg-white text-rose-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">支出篩選</button>
-          <button @click="detailFilterType = 'income'; detailSelectedCats = []" :class="detailFilterType === 'income' ? 'bg-white text-emerald-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">收入篩選</button>
+          <button :disabled="!!editingRecordId" @click="detailFilterType = 'expense'; detailSelectedCats = []" :class="detailFilterType === 'expense' ? 'bg-white text-rose-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">支出篩選</button>
+          <button :disabled="!!editingRecordId" @click="detailFilterType = 'income'; detailSelectedCats = []" :class="detailFilterType === 'income' ? 'bg-white text-emerald-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">收入篩選</button>
         </div>
-        <p class="text-[10px] text-slate-400">點選類別以計算總額，可複選。</p>
+        <p class="text-[10px] text-slate-400">點選類別按鈕以顯示個別種類總額，可複選。</p>
         <div class="flex gap-1.5 overflow-x-auto pb-1">
-          <button @click="detailSelectedCats = []" :class="detailSelectedCats.length === 0 ? 'bg-slate-800 text-white font-bold' : 'bg-slate-100 text-slate-600'" class="px-3 py-1.5 rounded-xl text-xs shrink-0 transition">全部</button>
-          <button v-for="cat in (detailFilterType === 'expense' ? allExpenseCats : allIncomeCats)" :key="cat" @click="toggleDetailCat(cat)" :class="detailSelectedCats.includes(cat) ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-100 text-slate-600'" class="px-3 py-1.5 rounded-xl text-xs shrink-0 transition">
+          <button :disabled="!!editingRecordId" @click="detailSelectedCats = []" :class="detailSelectedCats.length === 0 ? 'selected font-bold' : ''" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">全部</button>
+          <button v-for="cat in (detailFilterType === 'expense' ? allExpenseCats : allIncomeCats)" :key="cat" :disabled="!!editingRecordId" @click="toggleDetailCat(cat)" :class="detailSelectedCats.includes(cat) ? 'selected font-bold' : ''" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">
             {{ cat }}
           </button>
         </div>
@@ -159,12 +167,13 @@
         <div class="flex items-center justify-between gap-2">
           <label class="text-[11px] text-slate-500">日期排序</label>
           <div class="flex items-center gap-2">
-            <select v-model="sortOrder" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
+            <select v-model="sortOrder" :disabled="!!editingRecordId" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white">
               <option value="desc">日期由新到舊</option><option value="asc">日期由舊到新</option>
             </select>
-            <button @click="toggleDetailEditMode" :class="detailEditMode ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'" class="text-xs px-3 py-1.5 rounded-lg font-semibold">{{ detailEditMode ? '退出修改模式' : '修改模式' }}</button>
+
           </div>
         </div>
+        <p class="text-[10px] text-slate-400 text-right">長按明細即可編輯</p>
       </div>
 
       <!-- 明細列表 -->
@@ -174,34 +183,32 @@
         </div>
         <div v-for="item in sortedTransactions" :key="item.id"
           class="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs select-none">
-          <template v-if="detailEditMode">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <select v-model="item._editCategory" @focus="prepareInlineEdit(item)" class="edit-field w-full text-sm font-semibold">
+          <div class="flex items-center justify-between gap-2" @pointerdown="startLongPress(item)" @pointerup="cancelLongPress" @pointerleave="cancelLongPress" @pointercancel="cancelLongPress">
+            <div class="min-w-0 flex-1" @contextmenu.prevent>
+              <template v-if="editingRecordId === item.id">
+                <select v-model="item._editCategory" class="edit-field w-full text-sm font-semibold">
                   <option v-for="cat in (item.type === 'income' ? allIncomeCats : allExpenseCats)" :key="cat" :value="cat">{{ cat }}</option>
                 </select>
-                <input type="date" v-model="item._editDate" @focus="prepareInlineEdit(item)" class="edit-field mt-2 text-[11px]">
-                <input type="text" v-model="item._editNote" @focus="prepareInlineEdit(item)" class="edit-field mt-2 w-full text-xs" placeholder="備註（可留空）">
-              </div>
-              <div class="w-28 shrink-0 text-right">
-                <input type="number" min="0.01" step="any" v-model.number="item._editAmount" @focus="prepareInlineEdit(item)" class="edit-field w-full text-right text-sm font-bold" placeholder="金額">
-                <div class="mt-2 text-[10px] text-slate-400">{{ item.type === 'income' ? '收入' : '支出' }}</div>
-              </div>
+                <input type="date" v-model="item._editDate" class="edit-field mt-1 text-[11px]">
+                <input type="text" v-model="item._editNote" class="edit-field mt-1 w-full text-xs" placeholder="備註（可留空）">
+              </template>
+              <template v-else>
+                <div class="text-sm font-semibold text-slate-800">{{ item.category }}</div>
+                <div class="text-[11px] text-slate-400">{{ item.date }} <span v-if="item.note">· <span class="text-slate-500">{{ item.note }}</span></span></div>
+              </template>
             </div>
-            <div class="flex justify-end gap-2 mt-3 pt-2 border-t border-slate-100">
-              <button @click="cancelInlineEdit(item)" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs">取消</button>
-              <button @click="saveInlineEdit(item)" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">儲存</button>
-              <button @click="deleteTransactionFromList(item)" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs">刪除</button>
+            <div class="w-28 shrink-0 text-right">
+              <input v-if="editingRecordId === item.id" type="number" min="0.01" step="any" v-model.number="item._editAmount" class="edit-field w-full text-right text-sm font-bold" placeholder="金額">
+              <div v-else :class="item.type === 'income' ? 'text-emerald-600' : 'text-slate-800'" class="text-sm font-bold">{{ item.type === 'income' ? '+' : '-' }} {{ formatNumber(item.amount) }}</div>
+              <div class="mt-1 text-[10px] text-slate-400">{{ item.type === 'income' ? '收入' : '支出' }}</div>
             </div>
-          </template>
-          <div v-else @click="handleRecordClick(item)" @pointerdown="startLongPress(item)" @pointerup="cancelLongPress" @pointerleave="cancelLongPress" @pointercancel="cancelLongPress" class="flex items-center justify-between cursor-pointer">
-            <div class="min-w-0">
-              <div class="text-sm font-semibold text-slate-800">{{ item.category }}</div>
-              <div class="text-[11px] text-slate-400">{{ item.date }} <span v-if="item.note">· <span class="text-slate-500">{{ item.note }}</span></span></div>
+            <div v-if="editingRecordId === item.id" class="flex flex-row gap-1 shrink-0">
+              <button @click.stop="saveInlineEdit(item)" class="save-mini" aria-label="儲存" title="儲存">✓</button>
+              <button @click.stop="deleteTransactionFromList(item)" class="w-[30px] h-[30px] rounded-lg bg-rose-600 text-white flex items-center justify-center" aria-label="刪除" title="刪除">×</button>
+              <button @click.stop="cancelInlineEdit(item)" class="text-[10px] text-slate-500 underline">取消</button>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <div :class="item.type === 'income' ? 'text-emerald-600' : 'text-slate-800'" class="text-sm font-bold">{{ item.type === 'income' ? '+' : '-' }} {{ formatNumber(item.amount) }}</div>
-              <button v-if="deleteOptionTxId === item.id" @click.stop="deleteTransactionFromList(item)" class="px-2 py-1.5 bg-rose-600 text-white text-[11px] rounded-lg font-bold">刪除</button>
+            <div v-else class="flex flex-col gap-1 shrink-0">
+              <button v-if="deleteOptionTxId === item.id" @click.stop="deleteTransactionFromList(item)" class="px-2 py-1 bg-rose-600 text-white text-[11px] rounded-lg font-bold">刪除</button>
             </div>
           </div>
         </div>
@@ -219,22 +226,22 @@
       <!-- 可拖曳排序、可刪除的分類按鈕 -->
       <div class="flex items-center justify-between gap-2">
         <p class="text-[11px] text-slate-400">長按約 0.5 秒即可拖曳排序。</p>
-        <button @click="categoryDeleteMode = !categoryDeleteMode" :class="categoryDeleteMode ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-600'" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold">{{ categoryDeleteMode ? '退出刪除模式' : '刪除模式' }}</button>
+        <button @click="categoryDeleteMode = !categoryDeleteMode" :class="categoryDeleteMode ? 'bg-rose-600 text-white' : 'theme-action-soft'" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold">{{ categoryDeleteMode ? '退出刪除模式' : '刪除模式' }}</button>
       </div>
+      <div class="flex items-center gap-2"><span class="text-[10px] text-slate-400">顏色風格</span><button v-for="theme in themeOptions" :key="theme.id" @click="setTheme(theme.id)" :title="theme.name" :aria-label="theme.name" class="theme-swatch" :class="activeTheme === theme.id ? 'selected' : ''" :style="{background:theme.color}"></button></div>
       <div class="category-grid pt-1">
-        <div v-for="cat in visibleHomeCategories" :key="cat" :data-category="cat"
-          @contextmenu.prevent="" @pointerdown="startCategoryPointerDrag(cat, $event)" @pointermove="moveCategoryPointerDrag(cat, $event)" @pointerup="finishCategoryPointerDrag" @pointercancel="finishCategoryPointerDrag"
-          class="category-tile relative"
+        <div v-for="cat in visibleHomeCategories" :key="cat" :data-category="cat" draggable="false"
+          @dragstart="startCategoryDrag(cat, $event)" @dragover.prevent="dragOverCategory(cat)" @drop.prevent="dropCategory(cat)" @dragend="finishCategoryPointerDrag"
+          @pointerdown="startCategoryPointerDrag(cat, $event)" @pointermove="moveCategoryPointerDrag(cat, $event)" @pointerup="finishCategoryPointerDrag" @pointercancel="finishCategoryPointerDrag"
+          class="category-tile relative bg-white border border-slate-100 rounded-2xl shadow-md h-24"
           :class="[draggingCategory === cat ? 'category-dragging' : '', dragOverTarget === cat ? 'category-drop-target' : '', categoryLongPressed === cat ? 'is-long-press' : '']">
-          <button @click="onCategoryTileClick(cat)" class="w-full h-full p-2 flex flex-col gap-2 items-center justify-center active:scale-95 transition rounded-2xl">
-            <span class="category-icon" aria-hidden="true">{{ categoryIcon(cat) }}</span>
-            <span class="category-label text-center break-words">{{ cat }}</span>
+          <button @click="onCategoryTileClick(cat)" class="press-feedback w-full h-full p-2 flex items-center justify-center rounded-xl">
+            <span class="text-xs font-semibold text-center break-words">{{ cat }}</span>
           </button>
           <button v-if="categoryDeleteMode" @click.stop="deleteCategory(cat)" :aria-label="'刪除分類 '+cat" class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 text-white text-sm leading-none shadow">×</button>
         </div>
-        <button @click="openAddCatModal(homeTab)" class="bg-emerald-50 border border-emerald-200 border-dashed p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 active:scale-95 transition h-24 text-emerald-600">
-          <div class="w-9 h-9 rounded-xl bg-emerald-200/60 flex items-center justify-center font-bold text-base">＋</div>
-          <span class="text-xs font-semibold truncate w-full text-center">新增</span>
+        <button @click="openAddCatModal(homeTab)" class="theme-action-soft p-3 rounded-xl flex flex-col items-center justify-center gap-1.5 press-feedback h-16">
+          <span class="text-xs font-semibold truncate w-full text-center">＋ 新增</span>
         </button>
       </div>
     </main>
@@ -267,12 +274,12 @@
         <span class="text-[10px] mt-1">明細</span>
       </button>
 
-      <button @click="currentTab = 'home'" :class="currentTab === 'home' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center transition">
+      <button @click="switchTab('home')" :class="currentTab === 'home' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
         <span class="text-[10px] mt-1">首頁</span>
       </button>
 
-      <button @click="currentTab = 'reports'" :class="currentTab === 'reports' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center transition">
+      <button @click="switchTab('reports')" :class="currentTab === 'reports' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path></svg>
         <span class="text-[10px] mt-1">報表</span>
       </button>
@@ -308,16 +315,6 @@
 
 
 
-    </div>
-  </div>
-
-  <div v-if="showEditExitConfirm" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-5">
-    <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl space-y-3">
-      <h3 class="font-bold text-slate-800">還有尚未儲存的修改</h3>
-      <p class="text-sm text-slate-500">要儲存變更、放棄修改，還是繼續編輯？</p>
-      <button @click="saveAllAndExit" class="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold">儲存</button>
-      <button @click="discardAllAndExit" class="w-full py-2.5 rounded-xl bg-rose-50 text-rose-600 text-sm font-semibold">放棄修改</button>
-      <button @click="showEditExitConfirm = false" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm">繼續修改</button>
     </div>
   </div>
 
@@ -400,7 +397,25 @@
       const isInstalled = ref(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true);
       const sortOrder = ref('desc'), deleteOptionTxId = ref(null), draggingCategory = ref(null), dragOverTarget = ref(null);
       const categoryDeleteMode = ref(false);
+      const themeOptions = [
+        {id:'green',name:'綠色',color:'#10b981',dark:'#047857',soft:'#d1fae5'},
+        {id:'blue',name:'藍色',color:'#3b82f6',dark:'#1d4ed8',soft:'#dbeafe'},
+        {id:'purple',name:'紫色',color:'#8b5cf6',dark:'#6d28d9',soft:'#ede9fe'},
+        {id:'pink',name:'粉色',color:'#ec4899',dark:'#be185d',soft:'#fce7f3'},
+        {id:'orange',name:'橘色',color:'#f97316',dark:'#c2410c',soft:'#ffedd5'},
+        {id:'gray',name:'灰色',color:'#64748b',dark:'#334155',soft:'#e2e8f0'}
+      ];
+      const activeTheme = ref(localStorage.getItem('bookkeepingTheme') || 'green');
+      const setTheme = id => {
+        const theme = themeOptions.find(t => t.id === id) || themeOptions[0];
+        activeTheme.value = theme.id;
+        document.documentElement.style.setProperty('--accent', theme.color);
+        document.documentElement.style.setProperty('--accent-dark', theme.dark);
+        document.documentElement.style.setProperty('--accent-soft', theme.soft);
+        localStorage.setItem('bookkeepingTheme', theme.id);
+      };
       const detailEditMode = ref(false);
+      const editingRecordId = ref(null);
       const showEditExitConfirm = ref(false);
       const inlineEditOriginals = new Map();
       const recordsYear = ref(new Date().getFullYear()), recordsMonth = ref(new Date().getMonth() + 1);
@@ -411,6 +426,7 @@
       const hiddenExpenseCats = ref([]), hiddenIncomeCats = ref([]);
       const installPWA = () => window.__promptInstallPWA?.();
       window.addEventListener('appinstalled', () => { isInstalled.value = true; });
+      nextTick(() => setTheme(activeTheme.value));
 
       const selectMonth = (m) => {
         selectedMonthNum.value = m;
@@ -441,13 +457,7 @@
         const current = [...visibleHomeCategories.value];
         const from = current.indexOf(dragged), to = current.indexOf(targetCat);
         if (from < 0 || to < 0) return;
-        current.splice(from, 1); current.splice(to, 0, dragged);
-        // 保留隱藏分類與其他未顯示項目，只重新排列目前畫面可見的分類
-        const previous = [...order.value];
-        let visibleIndex = 0;
-        const next = previous.filter(c => !current.includes(c));
-        for (const c of current) next.splice(Math.min(visibleIndex++, next.length), 0, c);
-        order.value = next.length ? next : current;
+        current.splice(from, 1); current.splice(to, 0, dragged); order.value = current;
       };
       const dropCategory = async targetCat => {
         dragOverCategory(targetCat);
@@ -483,10 +493,14 @@
       };
 
       const prepareInlineEdit = item => {
-        if (inlineEditOriginals.has(item.id)) return;
-        const old = { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' };
-        inlineEditOriginals.set(item.id, old);
-        item._editDate = old.date; item._editAmount = old.amount; item._editNote = old.note; item._editCategory = old.category;
+        if (editingRecordId.value && editingRecordId.value !== item.id) return false;
+        if (!inlineEditOriginals.has(item.id)) {
+          const old = { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' };
+          inlineEditOriginals.set(item.id, old);
+          item._editDate = old.date; item._editAmount = old.amount; item._editNote = old.note; item._editCategory = old.category;
+        }
+        editingRecordId.value = item.id;
+        return true;
       };
       const itemEditChanged = item => {
         const old = inlineEditOriginals.get(item.id);
@@ -495,46 +509,38 @@
       const clearInlineDraft = item => {
         delete item._editDate; delete item._editAmount; delete item._editNote; delete item._editCategory;
         inlineEditOriginals.delete(item.id);
+        if (editingRecordId.value === item.id) editingRecordId.value = null;
       };
-      const cancelInlineEdit = item => { clearInlineDraft(item); prepareInlineEdit(item); };
-      const saveInlineEdit = async (item, quiet=false) => {
-        prepareInlineEdit(item);
-        if (!item._editAmount || Number(item._editAmount) <= 0) { if (!quiet) alert('請輸入正確金額'); return false; }
-        if (!item._editDate) { if (!quiet) alert('請選擇日期'); return false; }
+      const cancelInlineEdit = item => { clearInlineDraft(item); deleteOptionTxId.value = null; };
+      const saveInlineEdit = async item => {
+        if (!item._editAmount || Number(item._editAmount) <= 0) { alert('請輸入正確金額'); return false; }
+        if (!item._editDate) { alert('請選擇日期'); return false; }
         try {
           const data = { date:item._editDate, amount:Number(item._editAmount), note:String(item._editNote || '').trim(), category:item._editCategory };
           await updateDoc(doc(db, 'users', user.value.uid, 'transactions', item.id), data);
+          // 不清空整個 transactions；只更新目前這筆的畫面資料，避免存檔後清單暫時變空
           Object.assign(item, data);
-          // 存檔後仍留在修改模式：同步更新欄位與比較基準，避免輸入框因草稿被刪除而變空白
-          item._editDate = data.date; item._editAmount = data.amount; item._editNote = data.note; item._editCategory = data.category;
-          inlineEditOriginals.set(item.id, { ...data });
-          if (!quiet) alert('已儲存');
+          clearInlineDraft(item);
           return true;
-        } catch (err) { if (!quiet) alert('儲存失敗，請確認網路連線後再試。'); console.error(err); return false; }
+        } catch (err) { alert('儲存失敗，請確認網路連線後再試。'); console.error(err); return false; }
       };
-      const toggleDetailEditMode = () => {
-        if (!detailEditMode.value) { sortedTransactions.value.forEach(prepareInlineEdit); detailEditMode.value = true; return; }
-        if (sortedTransactions.value.some(itemEditChanged)) { showEditExitConfirm.value = true; return; }
-        sortedTransactions.value.forEach(clearInlineDraft); detailEditMode.value = false;
-      };
-      const saveAllAndExit = async () => {
-        for (const item of sortedTransactions.value) {
-          if (itemEditChanged(item) && !(await saveInlineEdit(item, true))) { alert('有明細儲存失敗，請檢查後重試。'); return; }
-          if (!itemEditChanged(item)) clearInlineDraft(item);
-        }
-        showEditExitConfirm.value = false; detailEditMode.value = false; alert('修改已儲存');
-      };
-      const discardAllAndExit = () => {
-        sortedTransactions.value.forEach(clearInlineDraft);
-        showEditExitConfirm.value = false; detailEditMode.value = false;
+      const ensureCanLeaveEdit = () => {
+        if (!editingRecordId.value) return true;
+        const item = transactions.value.find(t => t.id === editingRecordId.value);
+        if (!item || !itemEditChanged(item)) { if (item) clearInlineDraft(item); else editingRecordId.value = null; return true; }
+        alert('這筆明細尚未儲存，請先按儲存或取消。');
+        return false;
       };
       const shiftRecordsMonth = delta => {
+        if (!ensureCanLeaveEdit()) return;
         const d = new Date(recordsYear.value, recordsMonth.value - 1 + delta, 1);
         recordsYear.value = d.getFullYear(); recordsMonth.value = d.getMonth() + 1;
       };
       const openRecords = () => {
+        if (!ensureCanLeaveEdit()) return;
         const now = new Date(); recordsYear.value = now.getFullYear(); recordsMonth.value = now.getMonth() + 1; currentTab.value = 'records';
       };
+      const switchTab = tab => { if (!ensureCanLeaveEdit()) return; currentTab.value = tab; };
       const startCategoryPointerDrag = (cat, event) => {
         if (categoryDeleteMode.value || (event.pointerType === 'mouse' && event.button !== 0)) return;
         if (categoryPointerStart) clearTimeout(categoryPressTimer);
@@ -575,7 +581,11 @@
       };
       const onCategoryTileClick = cat => {
         if (suppressCategoryClick) { suppressCategoryClick = false; return; }
-        if (categoryDeleteMode.value) deleteCategory(cat); else openDirectTxModal(homeTab.value, cat);
+        if (categoryDeleteMode.value) deleteCategory(cat);
+        else {
+          if (navigator.vibrate) navigator.vibrate(25);
+          openDirectTxModal(homeTab.value, cat);
+        }
       };
 
       // 固定分類與自訂分類
@@ -597,10 +607,6 @@
           return ai - bi;
         });
       });
-      const categoryIcon = cat => ({
-        '食物':'🍱','飲料':'🧋','日用':'🛒','材料':'🥬','瓦斯':'🔥','加油':'⛽','店租':'🏠',
-        '攤收':'💵','店收':'🧾','市集':'🏪','其他':'📦'
-      }[cat] || (homeTab.value === 'income' ? '💰' : '🧺'));
 
       const transactions = ref([]);
       let unsubTransactions = null;
@@ -746,22 +752,12 @@
       });
 
       const filteredTotal = computed(() => filteredTransactions.value.reduce((sum,t) => sum + Number(t.amount || 0), 0));
-      const creationMillis = t => {
-        const v = t.createdAt;
-        if (!v) return 0;
-        if (typeof v.toMillis === 'function') return v.toMillis();
-        if (typeof v.seconds === 'number') return v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6);
-        if (typeof v === 'number') return v;
-        const parsed = Date.parse(v);
-        return Number.isFinite(parsed) ? parsed : 0;
-      };
       const sortedTransactions = computed(() => [...filteredTransactions.value].sort((a,b) => {
         const dateCmp = String(a.date || '').localeCompare(String(b.date || ''));
-        if (dateCmp !== 0) return sortOrder.value === 'asc' ? dateCmp : -dateCmp;
-        // 同一天依建立紀錄時間排序；新到舊時新建立的排前面，舊到新則相反
-        const timeCmp = creationMillis(a) - creationMillis(b);
-        if (timeCmp !== 0) return sortOrder.value === 'asc' ? timeCmp : -timeCmp;
-        return String(a.id || '').localeCompare(String(b.id || ''));
+        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+        const cmp = dateCmp || (timeA - timeB);
+        return sortOrder.value === 'asc' ? cmp : -cmp;
       }));
 
       // 支出報表統計
@@ -832,14 +828,20 @@
       const startLongPress = item => {
         longPressTriggered.value = false; clearTimeout(longPressTimer.value);
         longPressTimer.value = setTimeout(() => {
-          deleteOptionTxId.value = item.id; longPressTriggered.value = true;
-          if (navigator.vibrate) navigator.vibrate(35);
-        }, 650);
+          if (editingRecordId.value && editingRecordId.value !== item.id) {
+            if (!ensureCanLeaveEdit()) return;
+          }
+          deleteOptionTxId.value = null;
+          prepareInlineEdit(item);
+          longPressTriggered.value = true;
+          if (navigator.vibrate) navigator.vibrate(25);
+        }, 550);
       };
       const cancelLongPress = () => clearTimeout(longPressTimer.value);
       const deleteTransactionFromList = async item => {
         if (!confirm(`確定要刪除這筆「${item.category}」NT$ ${formatNumber(item.amount)} 紀錄嗎？`)) return;
         await deleteDoc(doc(db, "users", user.value.uid, "transactions", item.id));
+        clearInlineDraft(item);
         deleteOptionTxId.value = null;
       };
 
@@ -881,11 +883,11 @@
         user, authEmail, authPassword, authError, authLoading,
         handleLogin, handleRegister, handleLogout,
         currentTab, homeTab, timeMode, selectedYear, selectedMonthNum, showMonthPicker, selectMonth, goToCurrentMonth,
-        recordsYear, recordsMonth, shiftRecordsMonth, openRecords,
+        recordsYear, recordsMonth, shiftRecordsMonth, openRecords, switchTab,
         defaultExpenseCats, defaultIncomeCats, customExpenseCats, customIncomeCats, allExpenseCats, allIncomeCats,
-        visibleHomeCategories, categoryIcon, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory,
+        visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory, themeOptions, activeTheme, setTheme,
         categoryLongPressed, startCategoryPointerDrag, moveCategoryPointerDrag, finishCategoryPointerDrag, onCategoryTileClick,
-        detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, detailEditMode, showEditExitConfirm, toggleDetailEditMode, saveAllAndExit, discardAllAndExit, prepareInlineEdit, cancelInlineEdit, saveInlineEdit,
+        detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, editingRecordId, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, ensureCanLeaveEdit,
         filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
         showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, handleRecordClick,
         startLongPress, cancelLongPress, deleteOptionTxId, deleteTransactionFromList, saveTransaction, deleteTransaction,
