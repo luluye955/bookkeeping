@@ -24,8 +24,8 @@
     .category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
     .category-tile { touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; position:relative; min-width:0; height:64px; overflow:visible; border:0; border-radius:0; background:transparent; box-shadow:none; transition:transform .16s ease; }
     .category-tile:active { transform:scale(.97); }
-    .category-tile > button:first-child { border:0; border-radius:12px; background:var(--accent); color:#fff; box-shadow:none; }
-    .category-tile > button:first-child span { font-size:13px; line-height:1.35; font-weight:650; letter-spacing:.01em; }
+    .category-tile > button:first-child { width:58px; height:58px; margin:3px auto; display:flex; border:0; border-radius:12px; background:var(--accent); color:#fff; box-shadow:none; padding:4px; }
+    .category-tile > button:first-child span { font-size:12px; line-height:1.25; font-weight:650; letter-spacing:.01em; overflow-wrap:anywhere; }
     .category-dragging { opacity:.72; z-index:5; transform:scale(1.06) rotate(1deg); outline:2px solid var(--accent); }
     .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
     .category-tile.is-long-press { outline:2px solid var(--accent); outline-offset:1px; }
@@ -196,7 +196,7 @@
 
           </div>
         </div>
-        <p class="text-[10px] text-slate-400 text-right">長按明細即可編輯</p>
+        <p class="text-[11px] font-semibold text-amber-600 text-left">長按明細即可編輯</p>
       </div>
 
       <!-- 明細列表 -->
@@ -228,7 +228,6 @@
             <div v-if="editingRecordId === item.id" class="flex flex-row gap-1 shrink-0">
               <button @click.stop="saveInlineEdit(item)" class="save-mini px-2 text-[11px]" aria-label="儲存" title="儲存">儲存</button>
               <button @click.stop="deleteTransactionFromList(item)" class="h-[30px] px-2 rounded-lg bg-rose-600 text-white text-[11px] font-bold flex items-center justify-center" aria-label="刪除" title="刪除">刪除</button>
-              <button @click.stop="cancelInlineEdit(item)" class="text-[10px] text-slate-500 underline">取消</button>
             </div>
             <div v-else class="flex flex-col gap-1 shrink-0">
               <button v-if="deleteOptionTxId === item.id" @click.stop="deleteTransactionFromList(item)" class="px-2 py-1 bg-rose-600 text-white text-[11px] rounded-lg font-bold">刪除</button>
@@ -553,7 +552,7 @@
         if (!editingRecordId.value) return true;
         const item = transactions.value.find(t => t.id === editingRecordId.value);
         if (!item || !itemEditChanged(item)) { if (item) clearInlineDraft(item); else editingRecordId.value = null; return true; }
-        alert('這筆明細尚未儲存，請先按儲存或取消。');
+        alert('這筆明細尚未儲存，請先按儲存。');
         return false;
       };
       const handleRecordsOutsideClick = event => {
@@ -564,7 +563,7 @@
         if (!item) { editingRecordId.value = null; return; }
         if (!itemEditChanged(item)) { clearInlineDraft(item); return; }
         event.stopPropagation();
-        alert('這筆明細已修改，請先按「儲存」或「取消」後再離開編輯。');
+        alert('這筆明細已修改，請先按「儲存」後再離開編輯。');
       };
       const shiftRecordsMonth = delta => {
         if (!ensureCanLeaveEdit()) return;
@@ -625,8 +624,8 @@
       };
 
       // 固定分類與自訂分類
-      const defaultExpenseCats = ["食物", "飲料", "日用", "材料", "瓦斯", "加油", "店租"];
-      const defaultIncomeCats = ["攤收", "店收", "市集", "其他"];
+      const defaultExpenseCats = ["飲食", "交通", "娛樂", "日常"];
+      const defaultIncomeCats = ["薪資", "副業", "投資", "其他"];
       const customExpenseCats = ref([]);
       const customIncomeCats = ref([]);
       const allExpenseCats = computed(() => [...defaultExpenseCats, ...customExpenseCats.value]);
