@@ -22,11 +22,11 @@
     .install-glow { animation: install-glow 1.25s ease-in-out infinite; border: 2px solid #fef08a !important; }
     .category-dragging { opacity: .45; }
     .category-drop-target { outline: 2px solid #10b981; transform: scale(1.03); }
-    .category-tile { touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease; }
-    .category-tile:active { box-shadow: 0 8px 18px rgba(15,23,42,.12); }
-    .category-tile.is-pressed { transform: scale(.96); }
-    .edit-field { background: #fff; border: 1px solid #cbd5e1; border-radius: 9px; padding: 6px 8px; outline: none; min-width: 0; }
-    .edit-field:focus { border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,.12); }
+    .category-tile { touch-action: pan-y; user-select:none; -webkit-user-select:none; transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease; }
+    .category-tile:active { box-shadow: 0 7px 18px rgba(15,23,42,.12); }
+    .category-tile.drag-active { opacity:.55; transform:scale(.96); }
+    .edit-field { border:1px solid #cbd5e1; background:#fff; border-radius:8px; padding:4px 6px; min-width:0; max-width:100%; }
+    .month-nav-btn { width:32px; height:32px; border-radius:10px; background:#f1f5f9; color:#334155; font-weight:700; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased pb-24">
@@ -126,14 +126,13 @@
 
     <!-- 標籤頁 1：收支明細 (帶小按鈕多選過濾) -->
     <main v-if="currentTab === 'records'" class="flex-1 p-4 space-y-4">
-      <!-- 明細月份切換 -->
-      <div class="bg-white px-3 py-2.5 rounded-2xl border border-slate-100 shadow-xs flex items-center justify-between">
-        <button @click="shiftRecordsMonth(-1)" class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 font-bold active:scale-95">‹</button>
-        <div class="text-center"><div class="text-sm font-bold text-slate-800">{{ selectedYear }} 年 {{ selectedMonthNum }} 月</div><button @click="goToCurrentMonth" class="text-[10px] text-emerald-600">回到本月</button></div>
-        <button @click="shiftRecordsMonth(1)" class="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 font-bold active:scale-95">›</button>
-      </div>
       <!-- 篩選列：收入/支出切換與小按鈕矩陣 -->
       <div class="bg-white p-3 rounded-2xl border border-slate-100 space-y-2 shadow-xs">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <button class="month-nav-btn" @click="shiftRecordsMonth(-1)" aria-label="上個月">‹</button>
+          <div class="text-sm font-bold text-slate-700">{{ selectedYear }}年{{ selectedMonthNum }}月明細</div>
+          <button class="month-nav-btn" @click="shiftRecordsMonth(1)" aria-label="下個月">›</button>
+        </div>
         <div class="flex bg-slate-100 p-1 rounded-xl">
           <button @click="detailFilterType = 'expense'; detailSelectedCats = []" :class="detailFilterType === 'expense' ? 'bg-white text-rose-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">支出篩選</button>
           <button @click="detailFilterType = 'income'; detailSelectedCats = []" :class="detailFilterType === 'income' ? 'bg-white text-emerald-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">收入篩選</button>
@@ -160,33 +159,34 @@
         </div>
       </div>
 
-      <!-- 明細列表 -->
+      <!-- 明細列表：編輯欄位維持原本資訊位置 -->
       <div class="space-y-2">
         <div v-if="filteredTransactions.length === 0" class="text-center py-12 text-slate-400 text-xs">
-          此區間目前尚無紀錄，點選下方首頁開始記帳
+          此月份目前尚無紀錄，點選下方首頁開始記帳
         </div>
         <div v-for="item in sortedTransactions" :key="item.id"
           class="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs select-none">
-          <template v-if="detailEditMode">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0 flex-1 space-y-1.5">
-                <select v-model="item._editCategory" class="edit-field w-full text-sm font-semibold">
+          <div v-if="detailEditMode" class="flex items-center justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-semibold text-slate-800">
+                <select v-if="item._editingField === 'category'" v-model="item._editCategory" class="edit-field text-sm w-full" @blur="item._editingField = ''">
                   <option v-for="cat in (item.type === 'income' ? allIncomeCats : allExpenseCats)" :key="cat" :value="cat">{{ cat }}</option>
                 </select>
-                <input type="date" v-model="item._editDate" class="edit-field w-full text-[11px]">
-                <input type="text" v-model="item._editNote" class="edit-field w-full text-[11px]" placeholder="備註（可留空）">
+                <button v-else @click="prepareInlineEdit(item); item._editingField='category'" class="text-left rounded-md px-1 py-0.5" :class="item._editCategory !== item.category ? 'border border-amber-300' : 'border border-transparent'">{{ item._editCategory ?? item.category }}</button>
               </div>
-              <div class="w-28 shrink-0">
-                <input type="number" min="0.01" step="any" v-model.number="item._editAmount" class="edit-field w-full text-right text-sm font-bold" placeholder="金額">
-                <div class="text-[10px] text-slate-400 text-right mt-1">{{ item.type === 'income' ? '收入' : '支出' }}</div>
+              <div class="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-1">
+                <input v-if="item._editingField === 'date'" type="date" v-model="item._editDate" class="edit-field text-[11px]" @blur="item._editingField = ''">
+                <button v-else @click="prepareInlineEdit(item); item._editingField='date'" class="rounded-md px-1 py-0.5" :class="item._editDate !== item.date ? 'border border-amber-300' : 'border border-transparent'">{{ item._editDate ?? item.date }}</button>
+                <span v-if="item._editNote || item.note">·</span>
+                <input v-if="item._editingField === 'note'" type="text" v-model="item._editNote" placeholder="備註" class="edit-field text-[11px] w-full" @blur="item._editingField = ''">
+                <button v-else @click="prepareInlineEdit(item); item._editingField='note'" class="text-left rounded-md px-1 py-0.5 break-all" :class="item._editNote !== item.note ? 'border border-amber-300' : 'border border-transparent'">{{ item._editNote ?? item.note ?? '＋備註' }}</button>
               </div>
             </div>
-            <div class="flex justify-end gap-2 mt-3 pt-2 border-t border-slate-100">
-              <button @click="cancelInlineEdit(item)" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs">取消</button>
-              <button @click="saveInlineEdit(item)" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">儲存</button>
-              <button @click="deleteTransactionFromList(item)" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs">刪除</button>
+            <div class="shrink-0 text-right">
+              <input v-if="item._editingField === 'amount'" type="number" min="0.01" step="any" v-model.number="item._editAmount" class="edit-field text-sm font-bold w-28 text-right" @blur="item._editingField = ''">
+              <button v-else @click="prepareInlineEdit(item); item._editingField='amount'" class="text-sm font-bold rounded-md px-1 py-0.5" :class="[item.type === 'income' ? 'text-emerald-600' : 'text-slate-800', item._editAmount !== item.amount ? 'border border-amber-300' : 'border border-transparent']">{{ item.type === 'income' ? '+' : '-' }} {{ formatNumber(item._editAmount ?? item.amount) }}</button>
             </div>
-          </template>
+          </div>
           <div v-else @click="handleRecordClick(item)" @pointerdown="startLongPress(item)" @pointerup="cancelLongPress" @pointerleave="cancelLongPress" @pointercancel="cancelLongPress" class="flex items-center justify-between cursor-pointer">
             <div class="min-w-0">
               <div class="text-sm font-semibold text-slate-800">{{ item.category }}</div>
@@ -196,6 +196,11 @@
               <div :class="item.type === 'income' ? 'text-emerald-600' : 'text-slate-800'" class="text-sm font-bold">{{ item.type === 'income' ? '+' : '-' }} {{ formatNumber(item.amount) }}</div>
               <button v-if="deleteOptionTxId === item.id" @click.stop="deleteTransactionFromList(item)" class="px-2 py-1.5 bg-rose-600 text-white text-[11px] rounded-lg font-bold">刪除</button>
             </div>
+          </div>
+          <div v-if="detailEditMode" class="flex justify-end gap-2 mt-2 pt-2 border-t border-slate-100">
+            <button @click="cancelInlineEdit(item)" class="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs">取消</button>
+            <button @click="saveInlineEdit(item)" class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold">儲存</button>
+            <button @click="deleteTransactionFromList(item)" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs">刪除</button>
           </div>
         </div>
       </div>
@@ -215,17 +220,17 @@
         <button @click="categoryDeleteMode = !categoryDeleteMode" :class="categoryDeleteMode ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-600'" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold">{{ categoryDeleteMode ? '退出刪除模式' : '刪除模式' }}</button>
       </div>
       <div class="grid grid-cols-4 gap-3 pt-1">
-        <div v-for="cat in visibleHomeCategories" :key="cat" draggable="true"
-          @dragstart="startCategoryDrag(cat, $event)" @dragover.prevent="dragOverCategory(cat)" @drop.prevent="dropCategory(cat)" @dragend="endCategoryDrag"
-          @pointerdown="categoryPointerDown(cat, $event)" @pointermove="categoryPointerMove(cat, $event)" @pointerup="categoryPointerUp" @pointercancel="categoryPointerUp" @contextmenu.prevent
-          class="category-tile relative bg-gradient-to-br from-white to-slate-50 border border-white rounded-2xl shadow-[0_3px_10px_rgba(15,23,42,0.07)] h-24"
-          :class="[draggingCategory === cat ? 'category-dragging' : '', dragOverTarget === cat ? 'category-drop-target' : '', pressedCategory === cat ? 'is-pressed' : '']">
-          <button @click="onCategoryClick(cat)" class="w-full h-full p-2 flex items-center justify-center rounded-2xl active:scale-95 transition" :class="draggingCategory === cat ? 'pointer-events-none' : ''">
-            <span class="text-xs font-bold text-slate-700 text-center break-words leading-relaxed">{{ cat }}</span>
-          </button>
+        <div v-for="cat in visibleHomeCategories" :key="cat" :data-category="cat"
+          @pointerdown="categoryPointerDown(cat, $event)" @pointermove="categoryPointerMove($event)" @pointerup="categoryPointerUp($event)" @pointercancel="categoryPointerCancel"
+          @dragover.prevent="dragOverCategory(cat)" @drop.prevent="dropCategory(cat)" @click="categoryTileClick(cat, $event)"
+          class="category-tile relative bg-white border border-slate-100 rounded-2xl shadow-md h-24"
+          :class="[draggingCategory === cat ? 'category-dragging drag-active' : '', dragOverTarget === cat ? 'category-drop-target' : '']">
+          <div class="w-full h-full p-2 flex items-center justify-center pointer-events-none">
+            <span class="text-xs font-semibold text-slate-700 text-center break-words">{{ cat }}</span>
+          </div>
           <button v-if="categoryDeleteMode" @click.stop="deleteCategory(cat)" :aria-label="'刪除分類 '+cat" class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 text-white text-sm leading-none shadow">×</button>
         </div>
-        <button @click="openAddCatModal(homeTab)" class="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 border-dashed p-3 rounded-2xl shadow-sm flex flex-col items-center justify-center gap-1.5 active:scale-95 transition h-24 text-emerald-700">
+        <button @click="openAddCatModal(homeTab)" class="bg-emerald-50 border border-emerald-200 border-dashed p-3 rounded-2xl flex flex-col items-center justify-center gap-1.5 active:scale-95 transition h-24 text-emerald-600">
           <div class="w-9 h-9 rounded-xl bg-emerald-200/60 flex items-center justify-center font-bold text-base">＋</div>
           <span class="text-xs font-semibold truncate w-full text-center">新增</span>
         </button>
@@ -255,7 +260,7 @@
 
     <!-- 底部導覽列 (3 大核心分頁：明細、首頁、報表) -->
     <nav class="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 px-8 py-2.5 flex justify-around items-center z-10">
-      <button @click="openRecords" :class="currentTab === 'records' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center transition">
+      <button @click="openRecordsTab" :class="currentTab === 'records' ? 'text-emerald-600 font-bold' : 'text-slate-400'" class="flex flex-col items-center transition">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
         <span class="text-[10px] mt-1">明細</span>
       </button>
@@ -304,14 +309,14 @@
     </div>
   </div>
 
-  <!-- 退出修改模式確認 -->
-  <div v-if="showEditExitDialog" class="fixed inset-0 bg-slate-900/45 z-[60] flex items-center justify-center p-5">
-    <div class="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl space-y-3">
-      <h3 class="text-base font-bold text-slate-800">尚有未儲存的修改</h3>
-      <p class="text-xs leading-5 text-slate-500">要先儲存變更、放棄修改，還是繼續編輯？</p>
-      <button @click="saveAllInlineEdits" class="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-bold">儲存</button>
-      <button @click="discardAllInlineEdits" class="w-full py-2.5 rounded-xl bg-rose-50 text-rose-600 text-sm font-semibold">放棄修改</button>
-      <button @click="showEditExitDialog = false" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-600 text-sm">繼續修改</button>
+  <!-- 未儲存修改確認 -->
+  <div v-if="showUnsavedDialog" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-xl space-y-3">
+      <h3 class="text-base font-bold text-slate-800">有尚未儲存的修改</h3>
+      <p class="text-sm text-slate-500">離開修改模式前，要如何處理這些變更？</p>
+      <button @click="resolveUnsavedChanges('save')" class="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold">儲存</button>
+      <button @click="resolveUnsavedChanges('discard')" class="w-full py-2.5 rounded-xl bg-rose-50 text-rose-600 text-sm font-semibold">放棄修改</button>
+      <button @click="resolveUnsavedChanges('continue')" class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 text-sm font-semibold">繼續修改</button>
     </div>
   </div>
 
@@ -395,10 +400,9 @@
       const sortOrder = ref('desc'), deleteOptionTxId = ref(null), draggingCategory = ref(null), dragOverTarget = ref(null);
       const categoryDeleteMode = ref(false);
       const detailEditMode = ref(false);
-      const showEditExitDialog = ref(false);
       const inlineEditOriginals = new Map();
-      const pressedCategory = ref(null);
-      let categoryPressTimer = null, categoryPointerStart = null, categoryDragMoved = false, suppressCategoryClick = false;
+      const categoryPress = { timer:null, startX:0, startY:0, active:false, moved:false, cat:null, type:null };
+      const suppressCategoryClick = ref(false);
       const longPressTimer = ref(null), longPressTriggered = ref(false);
       const homeExpenseOrder = ref([]), homeIncomeOrder = ref([]);
       const hiddenExpenseCats = ref([]), hiddenIncomeCats = ref([]);
@@ -408,6 +412,17 @@
       const selectMonth = (m) => {
         selectedMonthNum.value = m;
         showMonthPicker.value = false;
+      };
+      const shiftRecordsMonth = (delta) => {
+        const d = new Date(selectedYear.value, selectedMonthNum.value - 1 + delta, 1);
+        selectedYear.value = d.getFullYear();
+        selectedMonthNum.value = d.getMonth() + 1;
+        timeMode.value = 'month';
+      };
+      const openRecordsTab = () => {
+        goToCurrentMonth();
+        detailEditMode.value = false;
+        currentTab.value = 'records';
       };
       const goToCurrentMonth = () => {
         const now = new Date();
@@ -426,77 +441,68 @@
         draggingCategory.value = cat;
         if (event?.dataTransfer) { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', cat); }
       };
-      const reorderCategoryAtPoint = (x, y) => {
-        const el = document.elementFromPoint(x, y)?.closest('.category-tile');
-        if (!el) return;
-        const targetCat = [...el.parentElement.querySelectorAll('.category-tile')].find(node => node === el)?.__vueParentComponent?.props?.cat;
-        // Vue 不一定會暴露 props，改用目前分類順序與元素位置判斷
-        const tiles = [...el.parentElement.querySelectorAll('.category-tile')];
-        const targetIndex = tiles.indexOf(el);
-        const cats = visibleHomeCategories.value;
-        const target = cats[targetIndex];
-        const dragged = draggingCategory.value;
-        if (!target || !dragged || target === dragged) return;
-        const order = homeTab.value === 'expense' ? homeExpenseOrder : homeIncomeOrder;
-        const current = [...cats];
-        const from = current.indexOf(dragged), to = current.indexOf(target);
-        if (from < 0 || to < 0) return;
-        current.splice(from, 1); current.splice(to, 0, dragged);
-        order.value = current;
-        dragOverTarget.value = target;
-      };
       const dragOverCategory = targetCat => {
+        if (!draggingCategory.value) return;
         dragOverTarget.value = targetCat;
-        const dragged = draggingCategory.value;
-        if (!dragged || dragged === targetCat) return;
-        const order = homeTab.value === 'expense' ? homeExpenseOrder : homeIncomeOrder;
+        const order = categoryPress.type === 'income' ? homeIncomeOrder : homeExpenseOrder;
         const current = [...visibleHomeCategories.value];
-        const from = current.indexOf(dragged), to = current.indexOf(targetCat);
-        if (from < 0 || to < 0) return;
-        current.splice(from, 1); current.splice(to, 0, dragged); order.value = current;
-      };
-      const endCategoryDrag = async () => {
-        if (draggingCategory.value) await persistCategorySettings();
-        draggingCategory.value = null; dragOverTarget.value = null;
-      };
-      const dropCategory = async targetCat => {
-        dragOverCategory(targetCat);
-        await endCategoryDrag();
+        const from = current.indexOf(draggingCategory.value), to = current.indexOf(targetCat);
+        if (from < 0 || to < 0 || from === to) return;
+        current.splice(from, 1); current.splice(to, 0, draggingCategory.value);
+        order.value = current;
       };
       const categoryPointerDown = (cat, event) => {
-        if (categoryDeleteMode.value || event.button !== 0) return;
-        categoryPointerStart = { cat, x:event.clientX, y:event.clientY, pointerId:event.pointerId };
-        categoryDragMoved = false; pressedCategory.value = cat;
-        clearTimeout(categoryPressTimer);
-        categoryPressTimer = setTimeout(() => {
-          if (!categoryPointerStart) return;
-          draggingCategory.value = cat; categoryDragMoved = true; suppressCategoryClick = true;
-          if (navigator.vibrate) navigator.vibrate(25);
+        if (categoryDeleteMode.value) return;
+        categoryPress.cat = cat; categoryPress.type = homeTab.value;
+        categoryPress.startX = event.clientX; categoryPress.startY = event.clientY;
+        categoryPress.active = false; categoryPress.moved = false;
+        clearTimeout(categoryPress.timer);
+        categoryPress.timer = setTimeout(() => {
+          categoryPress.active = true;
+          draggingCategory.value = cat;
           try { event.currentTarget.setPointerCapture(event.pointerId); } catch (_) {}
         }, 500);
       };
-      const categoryPointerMove = (cat, event) => {
-        if (!categoryPointerStart || categoryPointerStart.cat !== cat) return;
-        const dx = event.clientX - categoryPointerStart.x, dy = event.clientY - categoryPointerStart.y;
-        if (!draggingCategory.value && Math.hypot(dx, dy) > 10) { clearTimeout(categoryPressTimer); }
-        if (draggingCategory.value === cat) {
-          categoryDragMoved = true;
-          reorderCategoryAtPoint(event.clientX, event.clientY);
-          event.preventDefault();
-        }
+      const categoryPointerMove = event => {
+        if (!categoryPress.cat) return;
+        const dx = event.clientX - categoryPress.startX, dy = event.clientY - categoryPress.startY;
+        if (!categoryPress.active && Math.hypot(dx,dy) > 10) { clearTimeout(categoryPress.timer); categoryPress.cat = null; return; }
+        if (!categoryPress.active) return;
+        categoryPress.moved = true;
+        event.preventDefault();
+        const el = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-category]');
+        if (el) dragOverCategory(el.dataset.category);
       };
-      const categoryPointerUp = async () => {
-        clearTimeout(categoryPressTimer); pressedCategory.value = null;
-        if (draggingCategory.value) {
+      const categoryPointerUp = async event => {
+        clearTimeout(categoryPress.timer);
+        if (categoryPress.active && categoryPress.moved) {
+          suppressCategoryClick.value = true;
+          const order = categoryPress.type === 'income' ? homeIncomeOrder : homeExpenseOrder;
+          const all = categoryPress.type === 'income' ? allIncomeCats.value : allExpenseCats.value;
+          const hidden = categoryPress.type === 'income' ? hiddenIncomeCats.value : hiddenExpenseCats.value;
+          const visible = [...order.value.filter(c => all.includes(c) && !hidden.includes(c))];
+          all.filter(c => !hidden.includes(c) && !visible.includes(c)).forEach(c => visible.push(c));
+          order.value = visible;
           await persistCategorySettings();
-          draggingCategory.value = null; dragOverTarget.value = null;
-          setTimeout(() => { suppressCategoryClick = false; }, 80);
+          setTimeout(() => suppressCategoryClick.value = false, 250);
         }
-        categoryPointerStart = null;
+        draggingCategory.value = null; dragOverTarget.value = null;
+        categoryPress.cat = null; categoryPress.active = false; categoryPress.moved = false;
       };
-      const onCategoryClick = cat => {
-        if (suppressCategoryClick || categoryDragMoved) { suppressCategoryClick = false; categoryDragMoved = false; return; }
-        if (categoryDeleteMode.value) deleteCategory(cat); else openDirectTxModal(homeTab.value, cat);
+      const categoryPointerCancel = () => {
+        clearTimeout(categoryPress.timer);
+        draggingCategory.value = null; dragOverTarget.value = null;
+        categoryPress.cat = null; categoryPress.active = false; categoryPress.moved = false;
+      };
+      const categoryTileClick = async (cat, event) => {
+        if (suppressCategoryClick.value || categoryPress.moved) { event?.preventDefault(); event?.stopPropagation(); return; }
+        if (categoryDeleteMode.value) await deleteCategory(cat);
+        else openDirectTxModal(homeTab.value, cat);
+      };
+      const dropCategory = async targetCat => {
+        dragOverCategory(targetCat);
+        draggingCategory.value = null; dragOverTarget.value = null;
+        await persistCategorySettings();
       };
       const moveCategory = async (cat, direction) => {
         const order = homeTab.value === 'expense' ? homeExpenseOrder : homeIncomeOrder;
@@ -527,81 +533,67 @@
       };
 
       const prepareInlineEdit = item => {
-        if (!inlineEditOriginals.has(item.id)) {
-          inlineEditOriginals.set(item.id, { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' });
-        }
-        if (item._editDate === undefined) item._editDate = item.date || '';
-        if (item._editAmount === undefined) item._editAmount = Number(item.amount || 0);
-        if (item._editNote === undefined) item._editNote = item.note || '';
-        if (item._editCategory === undefined) item._editCategory = item.category || '';
+        if (inlineEditOriginals.has(item.id)) return;
+        const original = { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' };
+        inlineEditOriginals.set(item.id, original);
+        item._editDate = original.date; item._editAmount = original.amount;
+        item._editNote = original.note; item._editCategory = original.category;
       };
       const itemEditChanged = item => {
         const old = inlineEditOriginals.get(item.id);
-        return !!old && (String(item._editDate ?? old.date) !== String(old.date) || Number(item._editAmount ?? old.amount) !== Number(old.amount) || String(item._editNote ?? old.note) !== String(old.note) || String(item._editCategory ?? old.category) !== String(old.category));
-      };
-      const clearInlineDraft = item => {
-        delete item._editDate; delete item._editAmount; delete item._editNote; delete item._editCategory;
-        inlineEditOriginals.delete(item.id);
+        return !!old && (String(item._editDate ?? item.date) !== String(old.date) ||
+          Number(item._editAmount ?? item.amount) !== Number(old.amount) ||
+          String(item._editNote ?? item.note) !== String(old.note) ||
+          String(item._editCategory ?? item.category) !== String(old.category));
       };
       const cancelInlineEdit = item => {
-        clearInlineDraft(item);
-        prepareInlineEdit(item);
-        const old = inlineEditOriginals.get(item.id);
-        // 取消本筆：回復雲端資料的原始值，並重新建立乾淨草稿
-        item._editDate = item.date || ''; item._editAmount = Number(item.amount || 0); item._editNote = item.note || ''; item._editCategory = item.category || '';
-        inlineEditOriginals.set(item.id, { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' });
+        const old = inlineEditOriginals.get(item.id) || { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' };
+        item._editDate = old.date; item._editAmount = old.amount; item._editNote = old.note; item._editCategory = old.category;
+        item._editingField = '';
       };
-      const saveInlineEdit = async (item, quiet=false) => {
+      const saveInlineEdit = async item => {
         prepareInlineEdit(item);
-        if (!item._editAmount || Number(item._editAmount) <= 0) { if (!quiet) alert('請輸入正確金額'); return false; }
-        if (!item._editDate) { if (!quiet) alert('請選擇日期'); return false; }
+        if (!item._editAmount || Number(item._editAmount) <= 0) return alert('請輸入正確金額');
+        if (!item._editDate) return alert('請選擇日期');
         try {
           const data = { date:item._editDate, amount:Number(item._editAmount), note:String(item._editNote || '').trim(), category:item._editCategory };
           await updateDoc(doc(db, 'users', user.value.uid, 'transactions', item.id), data);
           Object.assign(item, data);
-          inlineEditOriginals.set(item.id, { ...data });
-          item._editDate = data.date; item._editAmount = data.amount; item._editNote = data.note; item._editCategory = data.category;
-          if (!quiet) alert('已儲存');
+          inlineEditOriginals.set(item.id, {...data});
+          item._editDate=data.date; item._editAmount=data.amount; item._editNote=data.note; item._editCategory=data.category;
+          item._editingField = '';
+          alert('已儲存');
           return true;
-        } catch (err) { if (!quiet) alert('儲存失敗，請確認網路連線後再試。'); console.error(err); return false; }
+        } catch (err) { alert('儲存失敗，請確認網路連線後再試。'); console.error(err); return false; }
       };
+      const showUnsavedDialog = ref(false);
       const toggleDetailEditMode = () => {
         if (!detailEditMode.value) {
-          transactions.value.forEach(item => {
-            const old = { date:item.date || '', amount:Number(item.amount || 0), note:item.note || '', category:item.category || '' };
-            inlineEditOriginals.set(item.id, old);
-            item._editDate = old.date; item._editAmount = old.amount; item._editNote = old.note; item._editCategory = old.category;
-          });
+          sortedTransactions.value.forEach(prepareInlineEdit);
           detailEditMode.value = true;
           return;
         }
-        const dirty = transactions.value.some(item => itemEditChanged(item));
-        if (dirty) showEditExitDialog.value = true;
-        else discardAllInlineEdits();
-      };
-      const discardAllInlineEdits = () => {
-        transactions.value.forEach(item => {
-          const old = inlineEditOriginals.get(item.id);
-          if (old) Object.assign(item, { date:old.date, amount:old.amount, note:old.note, category:old.category });
-          delete item._editDate; delete item._editAmount; delete item._editNote; delete item._editCategory;
-        });
-        inlineEditOriginals.clear(); detailEditMode.value = false; showEditExitDialog.value = false;
-      };
-      const saveAllInlineEdits = async () => {
-        for (const item of transactions.value) {
-          if (itemEditChanged(item)) {
-            const ok = await saveInlineEdit(item, true);
-            if (!ok) { alert('有紀錄儲存失敗或欄位不正確，請修正後再試。'); return; }
-          }
+        if (sortedTransactions.value.some(itemEditChanged)) {
+          showUnsavedDialog.value = true;
+          return;
         }
-        transactions.value.forEach(item => { delete item._editDate; delete item._editAmount; delete item._editNote; delete item._editCategory; });
-        inlineEditOriginals.clear(); detailEditMode.value = false; showEditExitDialog.value = false;
-        alert('修改已儲存');
+        detailEditMode.value = false;
       };
-      const openRecords = () => { goToCurrentMonth(); currentTab.value = 'records'; };
-      const shiftRecordsMonth = delta => {
-        const d = new Date(selectedYear.value, selectedMonthNum.value - 1 + delta, 1);
-        selectedYear.value = d.getFullYear(); selectedMonthNum.value = d.getMonth() + 1; timeMode.value = 'month';
+      const resolveUnsavedChanges = async action => {
+        if (action === 'save') {
+          const changed = sortedTransactions.value.filter(itemEditChanged);
+          for (const item of changed) {
+            const ok = await saveInlineEdit(item);
+            if (!ok) return;
+          }
+        } else if (action === 'discard') {
+          sortedTransactions.value.forEach(cancelInlineEdit);
+        } else {
+          showUnsavedDialog.value = false;
+          return;
+        }
+        showUnsavedDialog.value = false;
+        detailEditMode.value = false;
       };
 
       // 固定分類與自訂分類
@@ -752,8 +744,13 @@
       const currentBalance = computed(() => currentIncome.value - currentExpense.value);
 
       // 明細頁專用過濾
+      const recordsMonthTransactions = computed(() => transactions.value.filter(t => {
+        if (!t.date) return false;
+        const [yy, mm] = t.date.split('-').map(Number);
+        return yy === selectedYear.value && mm === selectedMonthNum.value;
+      }));
       const filteredTransactions = computed(() => {
-        return timeFilteredTransactions.value.filter(t => {
+        return recordsMonthTransactions.value.filter(t => {
           if (t.type !== detailFilterType.value) return false;
           if (detailSelectedCats.value.length > 0) {
             return detailSelectedCats.value.includes(t.category);
@@ -884,10 +881,10 @@
       return {
         user, authEmail, authPassword, authError, authLoading,
         handleLogin, handleRegister, handleLogout,
-        currentTab, homeTab, timeMode, selectedYear, selectedMonthNum, showMonthPicker, selectMonth, goToCurrentMonth,
+        currentTab, homeTab, timeMode, selectedYear, selectedMonthNum, showMonthPicker, selectMonth, goToCurrentMonth, shiftRecordsMonth, openRecordsTab,
         defaultExpenseCats, defaultIncomeCats, customExpenseCats, customIncomeCats, allExpenseCats, allIncomeCats,
-        visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, endCategoryDrag, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory, pressedCategory, categoryPointerDown, categoryPointerMove, categoryPointerUp, onCategoryClick,
-        detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, detailEditMode, toggleDetailEditMode, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, showEditExitDialog, saveAllInlineEdits, discardAllInlineEdits, openRecords, shiftRecordsMonth,
+        visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory, categoryPointerDown, categoryPointerMove, categoryPointerUp, categoryPointerCancel, categoryTileClick,
+        detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, detailEditMode, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, toggleDetailEditMode, showUnsavedDialog, resolveUnsavedChanges,
         filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
         showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, handleRecordClick,
         startLongPress, cancelLongPress, deleteOptionTxId, deleteTransactionFromList, saveTransaction, deleteTransaction,
