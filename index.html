@@ -21,12 +21,13 @@
     .install-glow { animation: install-glow 1.25s ease-in-out infinite; border: 2px solid #fef08a !important; }
     /* 首頁分類按鈕：卡片感、觸控回饋與拖曳時的即時位移 */
     .category-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
-    .category-tile { touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; position:relative; min-width:0; height:94px; overflow:visible; border:1px solid #e2e8f0; border-radius:18px; background:linear-gradient(155deg,#fff 0%,#f8fafc 100%); box-shadow:0 3px 8px rgba(15,23,42,.07),0 1px 2px rgba(15,23,42,.04); transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease, opacity .16s ease; }
+    .category-tile { touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; position:relative; min-width:0; height:104px; overflow:visible; border:1px solid #e2e8f0; border-radius:20px; background:linear-gradient(160deg,#ffffff 0%,#f1f5f9 100%); box-shadow:0 4px 10px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04); transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease, opacity .16s ease; }
     .category-tile:active { box-shadow:0 6px 14px rgba(15,23,42,.13); }
-    .category-tile > button:first-child { border-radius:18px; }
-    .category-tile > button:first-child span { font-size:13px; line-height:1.35; font-weight:650; letter-spacing:.01em; }
-    .category-dragging { opacity:.72; z-index:5; transform:scale(1.06) rotate(1deg); border-color:#10b981; box-shadow:0 12px 24px rgba(16,185,129,.22); }
-    .category-drop-target { outline:2px solid #10b981; outline-offset:1px; transform:scale(.96); background:#ecfdf5; }
+    .category-tile > button:first-child { border-radius:20px; }
+    .category-icon { display:flex; width:43px; height:43px; align-items:center; justify-content:center; border-radius:15px; background:linear-gradient(145deg,#d1fae5,#a7f3d0); color:#065f46; font-size:25px; line-height:1; box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 2px 4px rgba(15,23,42,.08); }
+    .category-label { max-width:100%; font-size:12px; line-height:1.25; font-weight:700; letter-spacing:.01em; color:#334155; }
+    .category-dragging { opacity:.82; z-index:5; transform:scale(1.04) rotate(1deg); border-color:#10b981; box-shadow:0 12px 24px rgba(16,185,129,.25); }
+    .category-drop-target { outline:3px solid #10b981; outline-offset:1px; transform:scale(.94); background:#ecfdf5; }
     .category-tile.is-long-press { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.18),0 8px 18px rgba(15,23,42,.12); }
     .category-grid > * { transition:transform .16s ease; }
     /* 黃色欄位邊框：用 !important 避免被 Tailwind 邊框樣式蓋掉 */
@@ -220,13 +221,13 @@
         <button @click="categoryDeleteMode = !categoryDeleteMode" :class="categoryDeleteMode ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-600'" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold">{{ categoryDeleteMode ? '退出刪除模式' : '刪除模式' }}</button>
       </div>
       <div class="category-grid pt-1">
-        <div v-for="cat in visibleHomeCategories" :key="cat" :data-category="cat" draggable="true"
-          @dragstart="startCategoryDrag(cat, $event)" @dragover.prevent="dragOverCategory(cat)" @drop.prevent="dropCategory(cat)" @dragend="finishCategoryPointerDrag"
-          @pointerdown="startCategoryPointerDrag(cat, $event)" @pointermove="moveCategoryPointerDrag(cat, $event)" @pointerup="finishCategoryPointerDrag" @pointercancel="finishCategoryPointerDrag"
-          class="category-tile relative bg-white border border-slate-100 rounded-2xl shadow-md h-24"
+        <div v-for="cat in visibleHomeCategories" :key="cat" :data-category="cat"
+          @contextmenu.prevent="" @pointerdown="startCategoryPointerDrag(cat, $event)" @pointermove="moveCategoryPointerDrag(cat, $event)" @pointerup="finishCategoryPointerDrag" @pointercancel="finishCategoryPointerDrag"
+          class="category-tile relative"
           :class="[draggingCategory === cat ? 'category-dragging' : '', dragOverTarget === cat ? 'category-drop-target' : '', categoryLongPressed === cat ? 'is-long-press' : '']">
-          <button @click="onCategoryTileClick(cat)" class="w-full h-full p-2 flex items-center justify-center active:scale-95 transition rounded-2xl">
-            <span class="text-xs font-semibold text-slate-700 text-center break-words">{{ cat }}</span>
+          <button @click="onCategoryTileClick(cat)" class="w-full h-full p-2 flex flex-col gap-2 items-center justify-center active:scale-95 transition rounded-2xl">
+            <span class="category-icon" aria-hidden="true">{{ categoryIcon(cat) }}</span>
+            <span class="category-label text-center break-words">{{ cat }}</span>
           </button>
           <button v-if="categoryDeleteMode" @click.stop="deleteCategory(cat)" :aria-label="'刪除分類 '+cat" class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-rose-600 text-white text-sm leading-none shadow">×</button>
         </div>
@@ -439,7 +440,13 @@
         const current = [...visibleHomeCategories.value];
         const from = current.indexOf(dragged), to = current.indexOf(targetCat);
         if (from < 0 || to < 0) return;
-        current.splice(from, 1); current.splice(to, 0, dragged); order.value = current;
+        current.splice(from, 1); current.splice(to, 0, dragged);
+        // 保留隱藏分類與其他未顯示項目，只重新排列目前畫面可見的分類
+        const previous = [...order.value];
+        let visibleIndex = 0;
+        const next = previous.filter(c => !current.includes(c));
+        for (const c of current) next.splice(Math.min(visibleIndex++, next.length), 0, c);
+        order.value = next.length ? next : current;
       };
       const dropCategory = async targetCat => {
         dragOverCategory(targetCat);
@@ -496,7 +503,10 @@
         try {
           const data = { date:item._editDate, amount:Number(item._editAmount), note:String(item._editNote || '').trim(), category:item._editCategory };
           await updateDoc(doc(db, 'users', user.value.uid, 'transactions', item.id), data);
-          Object.assign(item, data); clearInlineDraft(item);
+          Object.assign(item, data);
+          // 存檔後仍留在修改模式：同步更新欄位與比較基準，避免輸入框因草稿被刪除而變空白
+          item._editDate = data.date; item._editAmount = data.amount; item._editNote = data.note; item._editCategory = data.category;
+          inlineEditOriginals.set(item.id, { ...data });
           if (!quiet) alert('已儲存');
           return true;
         } catch (err) { if (!quiet) alert('儲存失敗，請確認網路連線後再試。'); console.error(err); return false; }
@@ -586,6 +596,10 @@
           return ai - bi;
         });
       });
+      const categoryIcon = cat => ({
+        '食物':'🍱','飲料':'🧋','日用':'🛒','材料':'🥬','瓦斯':'🔥','加油':'⛽','店租':'🏠',
+        '攤收':'💵','店收':'🧾','市集':'🏪','其他':'📦'
+      }[cat] || (homeTab.value === 'income' ? '💰' : '🧺'));
 
       const transactions = ref([]);
       let unsubTransactions = null;
@@ -731,9 +745,22 @@
       });
 
       const filteredTotal = computed(() => filteredTransactions.value.reduce((sum,t) => sum + Number(t.amount || 0), 0));
+      const creationMillis = t => {
+        const v = t.createdAt;
+        if (!v) return 0;
+        if (typeof v.toMillis === 'function') return v.toMillis();
+        if (typeof v.seconds === 'number') return v.seconds * 1000 + Math.floor((v.nanoseconds || 0) / 1e6);
+        if (typeof v === 'number') return v;
+        const parsed = Date.parse(v);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
       const sortedTransactions = computed(() => [...filteredTransactions.value].sort((a,b) => {
-        const cmp = String(a.date || '').localeCompare(String(b.date || ''));
-        return sortOrder.value === 'asc' ? cmp : -cmp;
+        const dateCmp = String(a.date || '').localeCompare(String(b.date || ''));
+        if (dateCmp !== 0) return sortOrder.value === 'asc' ? dateCmp : -dateCmp;
+        // 同一天依建立紀錄時間排序；新到舊時新建立的排前面，舊到新則相反
+        const timeCmp = creationMillis(a) - creationMillis(b);
+        if (timeCmp !== 0) return sortOrder.value === 'asc' ? timeCmp : -timeCmp;
+        return String(a.id || '').localeCompare(String(b.id || ''));
       }));
 
       // 支出報表統計
@@ -855,7 +882,7 @@
         currentTab, homeTab, timeMode, selectedYear, selectedMonthNum, showMonthPicker, selectMonth, goToCurrentMonth,
         recordsYear, recordsMonth, shiftRecordsMonth, openRecords,
         defaultExpenseCats, defaultIncomeCats, customExpenseCats, customIncomeCats, allExpenseCats, allIncomeCats,
-        visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory,
+        visibleHomeCategories, categoryIcon, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory,
         categoryLongPressed, startCategoryPointerDrag, moveCategoryPointerDrag, finishCategoryPointerDrag, onCategoryTileClick,
         detailFilterType, detailSelectedCats, toggleDetailCat, sortOrder, filteredTotal, sortedTransactions, detailEditMode, showEditExitConfirm, toggleDetailEditMode, saveAllAndExit, discardAllAndExit, prepareInlineEdit, cancelInlineEdit, saveInlineEdit,
         filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
