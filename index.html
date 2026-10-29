@@ -31,7 +31,7 @@
     .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
     .category-tile.is-long-press { outline:2px solid var(--accent); outline-offset:1px; }
     .category-grid > * { transition:transform .16s ease; }
-    .detail-cat-button { touch-action:auto; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+    .detail-cat-button { touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
     .detail-cat-button.detail-cat-dragging { opacity:.65; outline:2px solid var(--accent); }
     .detail-cat-button.detail-cat-drop-target { outline:2px solid var(--accent); outline-offset:1px; }
     .theme-swatch { width:28px; height:28px; flex:0 0 28px; border-radius:10px; border:1px solid #d1d5db; box-shadow:none; }
@@ -187,7 +187,7 @@
           <button :disabled="!!editingRecordId" @click="detailFilterType = 'income'; detailSelectedCats = []" :class="detailFilterType === 'income' ? 'bg-white text-emerald-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">收入篩選</button>
         </div>
         <p class="text-[11px] font-semibold text-amber-600">點選類別按鈕以顯示個別種類總額，可複選。（長按拖曳調整順序）</p>
-        <div class="flex gap-1.5 overflow-x-auto pb-1">
+        <div class="detail-cat-strip flex gap-1.5 overflow-x-auto pb-1" style="touch-action:pan-y; -webkit-overflow-scrolling:touch;">
           <button :disabled="!!editingRecordId" @click="detailSelectedCats = []" :class="detailSelectedCats.length === 0 ? 'selected font-bold' : ''" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">全部</button>
           <button v-for="cat in orderedDetailCats" :key="cat" :data-detail-category="cat" :disabled="!!editingRecordId" @click="toggleDetailCat(cat)" @pointerdown="startDetailCategoryDrag(cat, $event)" @pointermove="moveDetailCategoryDrag(cat, $event)" @pointerup="finishDetailCategoryDrag($event)" @pointercancel="finishDetailCategoryDrag($event)" :class="[detailSelectedCats.includes(cat) ? 'selected font-bold' : '', detailDraggingCategory === cat ? 'detail-cat-dragging' : '', detailDragOverTarget === cat ? 'detail-cat-drop-target' : '']" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">
             {{ cat }}
@@ -346,7 +346,7 @@
       </div>
       <!-- 各記帳分類獨立的常用備註 -->
       <div v-if="!isEditing" class="space-y-2">
-        <div class="text-[11px] font-semibold text-slate-500">常用備註</div>
+        <div class="text-[11px] font-semibold text-slate-500">常用備註（長按進入編輯）</div>
         <div class="flex flex-wrap items-center gap-2">
           <button v-for="(note, idx) in currentQuickNotes" :key="txForm.type + ':' + txForm.category + ':' + idx" type="button"
             class="quick-note-chip press-feedback px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-slate-50 text-slate-700 max-w-full break-words"
@@ -730,7 +730,8 @@
       };
       const startDetailCategoryDrag = (cat, event) => {
         if (editingRecordId.value || (event.pointerType === 'mouse' && event.button !== 0)) return;
-        detailCategoryPointerStart = { cat, x:event.clientX, y:event.clientY, pointerId:event.pointerId };
+        const strip = event.currentTarget.closest(".detail-cat-strip");
+        detailCategoryPointerStart = { cat, x:event.clientX, y:event.clientY, pointerId:event.pointerId, strip, scrollLeft:strip?.scrollLeft || 0, scrolling:false };
         clearTimeout(detailCategoryPressTimer);
         detailCategoryPressTimer = setTimeout(() => {
           if (!detailCategoryPointerStart || detailCategoryPointerStart.pointerId !== event.pointerId) return;
@@ -743,8 +744,23 @@
       const moveDetailCategoryDrag = (cat, event) => {
         if (!detailCategoryPointerStart || detailCategoryPointerStart.pointerId !== event.pointerId) return;
         if (!detailDraggingCategory.value) {
-          if (Math.hypot(event.clientX-detailCategoryPointerStart.x, event.clientY-detailCategoryPointerStart.y) > 12) {
-            clearTimeout(detailCategoryPressTimer); detailCategoryPointerStart = null;
+          const dx = event.clientX - detailCategoryPointerStart.x;
+          const dy = event.clientY - detailCategoryPointerStart.y;
+          if (Math.hypot(dx, dy) > 12) {
+            clearTimeout(detailCategoryPressTimer);
+            if (Math.abs(dx) > Math.abs(dy) && detailCategoryPointerStart.strip) {
+              detailCategoryPointerStart.scrolling = true;
+              detailCategoryPointerStart.strip.scrollLeft = detailCategoryPointerStart.scrollLeft - dx;
+              suppressDetailCategoryClick = true;
+            } else if (Math.abs(dy) > Math.abs(dx)) {
+              detailCategoryPointerStart = null;
+            }
+          } else if (detailCategoryPointerStart.scrolling && detailCategoryPointerStart.strip) {
+            detailCategoryPointerStart.strip.scrollLeft = detailCategoryPointerStart.scrollLeft - dx;
+          }
+          if (detailCategoryPointerStart?.scrolling && detailCategoryPointerStart.strip) {
+            event.preventDefault();
+            detailCategoryPointerStart.strip.scrollLeft = detailCategoryPointerStart.scrollLeft - dx;
           }
           return;
         }
@@ -763,11 +779,12 @@
       const finishDetailCategoryDrag = async (event) => {
         clearTimeout(detailCategoryPressTimer);
         const wasDragging = !!detailDraggingCategory.value;
+        const wasScrolling = !!detailCategoryPointerStart?.scrolling;
         if (wasDragging && user.value) await persistCategorySettings();
         detailCategoryPointerStart = null;
         detailDraggingCategory.value = null;
         detailDragOverTarget.value = null;
-        if (wasDragging) setTimeout(() => { suppressDetailCategoryClick = false; }, 250);
+        if (wasDragging || wasScrolling) setTimeout(() => { suppressDetailCategoryClick = false; }, 250);
       };
 
       // 彈窗狀態
@@ -955,12 +972,21 @@
         quickNotePressTimer = setTimeout(async () => {
           quickNoteLongPressTriggered = true;
           if (navigator.vibrate) navigator.vibrate(55);
-          const next = prompt('修改常用備註；若要刪除，請清空內容後確認。', note);
+          const action = prompt('常用備註操作：輸入 1 修改，輸入 2 刪除。', '1');
+          if (action === null) return;
+          const notes = [...currentQuickNotes.value];
+          if (action.trim() === '2') {
+            if (!confirm(`確定刪除常用備註「${note}」？`)) return;
+            notes.splice(idx, 1);
+            await saveQuickNotesForCurrentCategory(notes);
+            return;
+          }
+          if (action.trim() !== '1') return alert('請輸入 1（修改）或 2（刪除）');
+          const next = prompt('輸入修改後的常用備註：', note);
           if (next === null) return;
           const trimmed = next.trim();
-          const notes = [...currentQuickNotes.value];
-          if (trimmed) notes[idx] = trimmed;
-          else notes.splice(idx, 1);
+          if (!trimmed) return alert('內容不能空白；如要刪除，請長按後輸入 2。');
+          notes[idx] = trimmed;
           await saveQuickNotesForCurrentCategory(notes);
         }, 550);
       };
