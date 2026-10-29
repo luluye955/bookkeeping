@@ -31,7 +31,7 @@
     .category-drop-target { outline:2px solid var(--accent); outline-offset:1px; transform:scale(.96); }
     .category-tile.is-long-press { outline:2px solid var(--accent); outline-offset:1px; }
     .category-grid > * { transition:transform .16s ease; }
-    .detail-cat-button { touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+    .detail-cat-button { touch-action:auto; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
     .detail-cat-button.detail-cat-dragging { opacity:.65; outline:2px solid var(--accent); }
     .detail-cat-button.detail-cat-drop-target { outline:2px solid var(--accent); outline-offset:1px; }
     .theme-swatch { width:28px; height:28px; flex:0 0 28px; border-radius:10px; border:1px solid #d1d5db; box-shadow:none; }
@@ -47,6 +47,8 @@
     .theme-action { background:var(--accent); color:white; }
     .theme-action-soft { background:var(--accent-soft); color:var(--accent-dark); }
     .press-feedback:active { filter:brightness(.92); }
+    .category-tile > button.press-feedback { transition:transform .08s ease, filter .08s ease, box-shadow .08s ease; -webkit-tap-highlight-color:transparent; }
+    .category-tile > button.press-feedback:active { filter:brightness(.78) saturate(1.15); transform:scale(.91); box-shadow:inset 0 2px 7px rgba(0,0,0,.18); }
     /* 黃色欄位邊框：用 !important 避免被 Tailwind 邊框樣式蓋掉 */
     .edit-field { border:2px solid #facc15 !important; border-radius:8px; padding:4px 6px; background:#fff; min-width:0; max-width:100%; box-shadow:0 0 0 1px rgba(250,204,21,.10); }
     .edit-field:focus { outline:none; border-color:#eab308 !important; box-shadow:0 0 0 3px rgba(250,204,21,.22); }
@@ -184,7 +186,7 @@
           <button :disabled="!!editingRecordId" @click="detailFilterType = 'expense'; detailSelectedCats = []" :class="detailFilterType === 'expense' ? 'bg-white text-rose-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">支出篩選</button>
           <button :disabled="!!editingRecordId" @click="detailFilterType = 'income'; detailSelectedCats = []" :class="detailFilterType === 'income' ? 'bg-white text-emerald-600 font-bold shadow-xs' : 'text-slate-500'" class="flex-1 py-1 rounded-lg text-xs transition">收入篩選</button>
         </div>
-        <p class="text-[10px] text-slate-400">點選類別按鈕以顯示個別種類總額，可複選。</p>
+        <p class="text-[11px] font-semibold text-amber-600">點選類別按鈕以顯示個別種類總額，可複選。（長按拖曳調整順序）</p>
         <div class="flex gap-1.5 overflow-x-auto pb-1">
           <button :disabled="!!editingRecordId" @click="detailSelectedCats = []" :class="detailSelectedCats.length === 0 ? 'selected font-bold' : ''" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">全部</button>
           <button v-for="cat in orderedDetailCats" :key="cat" :data-detail-category="cat" :disabled="!!editingRecordId" @click="toggleDetailCat(cat)" @pointerdown="startDetailCategoryDrag(cat, $event)" @pointermove="moveDetailCategoryDrag(cat, $event)" @pointerup="finishDetailCategoryDrag($event)" @pointercancel="finishDetailCategoryDrag($event)" :class="[detailSelectedCats.includes(cat) ? 'selected font-bold' : '', detailDraggingCategory === cat ? 'detail-cat-dragging' : '', detailDragOverTarget === cat ? 'detail-cat-drop-target' : '']" class="detail-cat-button px-3 py-1.5 rounded-xl text-xs shrink-0 transition">
@@ -342,6 +344,16 @@
       <div v-if="isEditing" class="flex justify-end">
         <button @click="deleteTransaction" class="py-1.5 px-3 bg-rose-50 text-rose-600 rounded-lg font-medium text-xs">刪除這筆紀錄</button>
       </div>
+      <!-- 各記帳分類獨立的常用備註 -->
+      <div v-if="!isEditing" class="space-y-2">
+        <div class="text-[11px] font-semibold text-slate-500">常用備註</div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button v-for="(note, idx) in currentQuickNotes" :key="txForm.type + ':' + txForm.category + ':' + idx" type="button"
+            class="quick-note-chip press-feedback px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 bg-slate-50 text-slate-700 max-w-full break-words"
+            @click="useQuickNote(note)" @pointerdown="startQuickNoteLongPress(note, idx, $event)" @pointerup="endQuickNoteLongPress" @pointercancel="endQuickNoteLongPress" @pointerleave="endQuickNoteLongPress">{{ note }}</button>
+          <button type="button" class="quick-note-chip press-feedback px-3 py-2 rounded-xl text-xs font-bold border border-dashed border-slate-300 bg-white text-slate-500" aria-label="新增常用備註" @click="addQuickNote">＋</button>
+        </div>
+      </div>
       <!-- 金額 (自動聚焦) -->
       <div>
         <label class="text-[11px] font-semibold text-slate-500">金額</label>
@@ -477,6 +489,14 @@
       const detailDraggingCategory = ref(null), detailDragOverTarget = ref(null);
       let detailCategoryPressTimer = null, detailCategoryPointerStart = null, suppressDetailCategoryClick = false;
       const hiddenExpenseCats = ref([]), hiddenIncomeCats = ref([]);
+      // quickNotes 使用「收支類型 + 分類名稱」作為 key，確保不同記帳分類各自記憶
+      const quickNotesByCategory = ref({});
+      const currentQuickNotes = computed(() => {
+        const key = `${txForm.value.type}::${txForm.value.category}`;
+        const saved = quickNotesByCategory.value[key];
+        return Array.isArray(saved) ? saved : ['預設'];
+      });
+      let quickNotePressTimer = null, quickNoteLongPressTriggered = false;
       const installPWA = () => window.__promptInstallPWA?.();
       window.addEventListener('appinstalled', () => { isInstalled.value = true; });
       nextTick(() => { setTheme(activeTheme.value); setBorder(activeBorder.value); });
@@ -496,7 +516,8 @@
           expense: customExpenseCats.value, income: customIncomeCats.value,
           orderExpense: homeExpenseOrder.value, orderIncome: homeIncomeOrder.value,
           detailOrderExpense: detailExpenseOrder.value, detailOrderIncome: detailIncomeOrder.value,
-          hiddenExpense: hiddenExpenseCats.value, hiddenIncome: hiddenIncomeCats.value
+          hiddenExpense: hiddenExpenseCats.value, hiddenIncome: hiddenIncomeCats.value,
+          quickNotes: quickNotesByCategory.value
         }, { merge: true });
       };
       const startCategoryDrag = (cat, event) => {
@@ -654,7 +675,7 @@
         if (suppressCategoryClick) { suppressCategoryClick = false; return; }
         if (categoryDeleteMode.value) deleteCategory(cat);
         else {
-          if (navigator.vibrate) navigator.vibrate(25);
+          if (navigator.vibrate) navigator.vibrate([35, 25, 45]);
           openDirectTxModal(homeTab.value, cat);
         }
       };
@@ -800,11 +821,13 @@
             detailIncomeOrder.value = snap.data().detailOrderIncome || [];
             hiddenExpenseCats.value = snap.data().hiddenExpense || [];
             hiddenIncomeCats.value = snap.data().hiddenIncome || [];
+            quickNotesByCategory.value = snap.data().quickNotes || {};
           } else {
             customExpenseCats.value = []; customIncomeCats.value = [];
             homeExpenseOrder.value = []; homeIncomeOrder.value = [];
             detailExpenseOrder.value = []; detailIncomeOrder.value = [];
             hiddenExpenseCats.value = []; hiddenIncomeCats.value = [];
+            quickNotesByCategory.value = {};
           }
         });
       };
@@ -906,6 +929,42 @@
       });
 
       const formatNumber = (num) => Math.round(num || 0).toLocaleString();
+
+      // 常用備註操作：各分類獨立保存；點擊時取代備註欄內容
+      const quickNotesKey = () => `${txForm.value.type}::${txForm.value.category}`;
+      const saveQuickNotesForCurrentCategory = async (notes) => {
+        quickNotesByCategory.value = { ...quickNotesByCategory.value, [quickNotesKey()]: notes };
+        await persistCategorySettings();
+      };
+      const useQuickNote = (note) => {
+        if (quickNoteLongPressTriggered) { quickNoteLongPressTriggered = false; return; }
+        txForm.value.note = note;
+        if (navigator.vibrate) navigator.vibrate(35);
+      };
+      const addQuickNote = async () => {
+        const value = prompt('輸入常用備註內容');
+        if (value === null) return;
+        const note = value.trim();
+        if (!note) return alert('常用備註不能是空白');
+        await saveQuickNotesForCurrentCategory([...currentQuickNotes.value, note]);
+      };
+      const startQuickNoteLongPress = (note, idx, event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        quickNoteLongPressTriggered = false;
+        clearTimeout(quickNotePressTimer);
+        quickNotePressTimer = setTimeout(async () => {
+          quickNoteLongPressTriggered = true;
+          if (navigator.vibrate) navigator.vibrate(55);
+          const next = prompt('修改常用備註；若要刪除，請清空內容後確認。', note);
+          if (next === null) return;
+          const trimmed = next.trim();
+          const notes = [...currentQuickNotes.value];
+          if (trimmed) notes[idx] = trimmed;
+          else notes.splice(idx, 1);
+          await saveQuickNotesForCurrentCategory(notes);
+        }, 550);
+      };
+      const endQuickNoteLongPress = () => { clearTimeout(quickNotePressTimer); };
 
       // 記帳互動操作
       const openDirectTxModal = (type, category) => {
@@ -1029,6 +1088,7 @@
         detailFilterType, detailSelectedCats, toggleDetailCat, orderedDetailCats, detailDraggingCategory, detailDragOverTarget, startDetailCategoryDrag, moveDetailCategoryDrag, finishDetailCategoryDrag, sortOrder, filteredTotal, sortedTransactions, editingRecordId, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, ensureCanLeaveEdit,
         filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
         showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, closeTxModalIfEmpty, handleRecordClick,
+        currentQuickNotes, useQuickNote, addQuickNote, startQuickNoteLongPress, endQuickNoteLongPress,
         startLongPress, cancelLongPress, deleteOptionTxId, deleteTransactionFromList, saveTransaction, deleteTransaction,
         showCatModal, newCatType, newCatName, openAddCatModal, closeCatModalIfEmpty, saveCustomCategory, isInstalled, installPWA
       };
