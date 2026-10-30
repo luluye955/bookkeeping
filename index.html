@@ -792,11 +792,20 @@
       const isEditing = ref(false);
       const currentTxId = ref(null);
       const amountInputRef = ref(null);
+      // 使用裝置當地日期，避免 UTC 日期造成台灣凌晨記帳日期倒退一天
+      const getLocalDate = () => {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+
       const txForm = ref({
         type: "expense",
         amount: null,
         category: "食物",
-        date: new Date().toISOString().slice(0, 10),
+        date: getLocalDate(),
         note: ""
       });
 
@@ -1000,7 +1009,7 @@
           type,
           amount: null,
           category,
-          date: new Date().toISOString().slice(0, 10),
+          date: getLocalDate(),
           note: ""
         };
         showTxModal.value = true;
