@@ -295,7 +295,7 @@
           <button type="button" v-for="cat in categoryStats" :key="cat.name"
             @click="toggleReportCat(cat.name)" :aria-pressed="selectedReportCats.includes(cat.name)"
             :class="selectedReportCats.includes(cat.name) ? 'border-emerald-500 bg-emerald-50' : 'border-transparent bg-white'"
-            class="block w-full rounded-xl border p-2 text-left transition-colors">
+            class="block w-full rounded-md border-0 p-0 text-left transition-colors">
             <div class="flex justify-between gap-2 text-xs mb-1 font-semibold">
               <span class="flex items-center gap-1.5"><span class="inline-flex h-4 w-4 items-center justify-center rounded border text-[10px]" :class="selectedReportCats.includes(cat.name) ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 text-transparent'">✓</span>{{ cat.name }}</span>
               <span>NT$ {{ formatNumber(cat.total) }} ({{ cat.percentage }}%)</span>
