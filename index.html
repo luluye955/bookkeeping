@@ -288,18 +288,26 @@
       <div class="bg-white p-4 rounded-3xl border border-slate-100 shadow-xs">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-sm font-bold text-slate-700">支出類別佔比 ({{ timeMode === 'month' ? selectedYear+'年'+selectedMonthNum+'月' : selectedYear+'全年度' }})</h2>
+          <button type="button" @click="selectedReportCats = []" class="shrink-0 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700" aria-label="清除所有報表類別選取">可複選</button>
         </div>
         <div v-if="categoryStats.length === 0" class="text-xs text-slate-400 text-center py-6">此區間無支出紀錄</div>
         <div class="space-y-3">
-          <div v-for="cat in categoryStats" :key="cat.name">
-            <div class="flex justify-between text-xs mb-1 font-semibold">
-              <span>{{ cat.name }}</span>
+          <button type="button" v-for="cat in categoryStats" :key="cat.name"
+            @click="toggleReportCat(cat.name)" :aria-pressed="selectedReportCats.includes(cat.name)"
+            :class="selectedReportCats.includes(cat.name) ? 'border-emerald-500 bg-emerald-50' : 'border-transparent bg-white'"
+            class="block w-full rounded-xl border p-2 text-left transition-colors">
+            <div class="flex justify-between gap-2 text-xs mb-1 font-semibold">
+              <span class="flex items-center gap-1.5"><span class="inline-flex h-4 w-4 items-center justify-center rounded border text-[10px]" :class="selectedReportCats.includes(cat.name) ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 text-transparent'">✓</span>{{ cat.name }}</span>
               <span>NT$ {{ formatNumber(cat.total) }} ({{ cat.percentage }}%)</span>
             </div>
             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
               <div class="bg-emerald-500 h-full rounded-full" :style="{ width: cat.percentage + '%' }"></div>
             </div>
-          </div>
+          </button>
+        </div>
+        <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-sm font-bold text-slate-800" aria-live="polite">
+          <span>小計（已選 {{ selectedReportCats.filter(name => categoryStats.some(cat => cat.name === name)).length }} 類）</span>
+          <span class="text-emerald-700">NT$ {{ formatNumber(reportSelectedSubtotal) }}</span>
         </div>
       </div>
     </main>
@@ -936,6 +944,14 @@
         return sortOrder.value === 'asc' ? cmp : -cmp;
       }));
 
+      // 支出報表複選：獨立於明細頁篩選，僅加總目前月份／年度存在的選取類別
+      const selectedReportCats = ref([]);
+      const toggleReportCat = name => {
+        selectedReportCats.value = selectedReportCats.value.includes(name)
+          ? selectedReportCats.value.filter(cat => cat !== name)
+          : [...selectedReportCats.value, name];
+      };
+
       // 支出報表統計
       const categoryStats = computed(() => {
         const expenses = timeFilteredTransactions.value.filter(t => t.type === 'expense');
@@ -953,6 +969,10 @@
           percentage: ((catMap[cat] / total) * 100).toFixed(1)
         })).sort((a, b) => b.total - a.total);
       });
+
+      const reportSelectedSubtotal = computed(() => categoryStats.value
+        .filter(cat => selectedReportCats.value.includes(cat.name))
+        .reduce((sum, cat) => sum + cat.total, 0));
 
       const formatNumber = (num) => Math.round(num || 0).toLocaleString();
 
@@ -1121,7 +1141,7 @@
         visibleHomeCategories, startCategoryDrag, dropCategory, dragOverCategory, draggingCategory, dragOverTarget, moveCategory, categoryDeleteMode, deleteCategory, themeOptions, activeTheme, setTheme, borderOptions, activeBorder, setBorder,
         categoryLongPressed, startCategoryPointerDrag, moveCategoryPointerDrag, finishCategoryPointerDrag, onCategoryTileClick,
         detailFilterType, detailSelectedCats, toggleDetailCat, orderedDetailCats, detailDraggingCategory, detailDragOverTarget, startDetailCategoryDrag, moveDetailCategoryDrag, finishDetailCategoryDrag, sortOrder, filteredTotal, sortedTransactions, editingRecordId, prepareInlineEdit, cancelInlineEdit, saveInlineEdit, ensureCanLeaveEdit,
-        filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, formatNumber,
+        filteredTransactions, currentIncome, currentExpense, currentBalance, categoryStats, selectedReportCats, toggleReportCat, reportSelectedSubtotal, formatNumber,
         showTxModal, isEditing, txForm, amountInputRef, openDirectTxModal, openEditModal, closeTxModalIfEmpty, handleRecordClick,
         currentQuickNotes, useQuickNote, addQuickNote, startQuickNoteLongPress, endQuickNoteLongPress,
         startLongPress, cancelLongPress, deleteOptionTxId, deleteTransactionFromList, saveTransaction, deleteTransaction,
